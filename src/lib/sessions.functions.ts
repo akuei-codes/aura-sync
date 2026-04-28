@@ -72,6 +72,16 @@ export const getSession = createServerFn({ method: "GET" })
     return { ...s, live_listeners: listeners[0]?.count ?? 0 };
   });
 
+// ---- Get a Spotify access token for the DJ's browser SDK -------------------
+// SECURITY: requires djToken. Returns short-lived access token only (never refresh).
+export const getSpotifyAccessToken = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string().min(1) }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    const accessToken = await getSessionAccessToken(data.sessionId);
+    return { accessToken };
+  });
+
 // ---- Search Spotify (DJ only) ----------------------------------------------
 export const searchCatalog = createServerFn({ method: "POST" })
   .inputValidator(
