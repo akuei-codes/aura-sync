@@ -121,10 +121,10 @@ function DJ() {
         if (cancelled || !window.Spotify) return;
         const player = new window.Spotify.Player({
           name: `ZYNK Booth · ${session.title}`,
-          getOAuthToken: (cb) => {
+          getOAuthToken: (cb: (token: string) => void) => {
             getSpotifyAccessToken({ data: { sessionId: session.id, djToken: token! } })
-              .then((t) => cb(t.accessToken))
-              .catch((e) => setPlayerError(String(e)));
+              .then((t: { accessToken: string }) => cb(t.accessToken))
+              .catch((e: unknown) => setPlayerError(String(e)));
           },
           volume: 0.8,
         });
