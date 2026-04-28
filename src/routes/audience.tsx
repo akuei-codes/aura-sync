@@ -308,6 +308,12 @@ function Audience() {
             {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground">...</span>}
           </div>
 
+          {queueMsg && (
+            <div className={`mt-3 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.2em] border hairline ${queueMsg.kind === "ok" ? "bg-foreground text-background" : "bg-destructive/20 text-foreground border-destructive"}`}>
+              {queueMsg.text}
+            </div>
+          )}
+
           <ul className="mt-4 space-y-2">
             {searchResults.map((t) => (
               <li key={t.id} className="border hairline p-3 flex items-center gap-3 bg-card">
@@ -320,9 +326,10 @@ function Audience() {
                 </div>
                 <button
                   onClick={() => queueRequest(t.id)}
-                  className="px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors"
+                  disabled={queueing === t.id}
+                  className="px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
                 >
-                  + queue
+                  {queueing === t.id ? "..." : "+ queue"}
                 </button>
               </li>
             ))}
