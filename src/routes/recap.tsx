@@ -63,7 +63,16 @@ function Recap() {
   return (
     <div className="min-h-screen bg-background text-foreground noise relative">
       <header className="border-b hairline px-6 md:px-12 py-5 flex items-center justify-between sticky top-0 bg-background/90 backdrop-blur z-30">
-        <Logo size="sm" />
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => (typeof window !== "undefined" && window.history.length > 1 ? window.history.back() : null)}
+            className="text-[10px] font-mono uppercase tracking-[0.3em] border hairline px-3 py-2 hover:bg-foreground hover:text-background transition-colors"
+            aria-label="back"
+          >
+            ← back
+          </button>
+          <Logo size="sm" />
+        </div>
         <nav className="flex items-center gap-3">
           <Link to="/dj" className="text-[10px] font-mono uppercase tracking-[0.3em] border hairline px-3 py-2 hover:bg-foreground hover:text-background transition-colors">DJ booth</Link>
           <Link to="/" className="text-[10px] font-mono uppercase tracking-[0.3em] border hairline px-3 py-2 hover:bg-foreground hover:text-background transition-colors">↩ home</Link>
