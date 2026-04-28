@@ -163,8 +163,15 @@ function Audience() {
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden noise max-w-md mx-auto border-x hairline">
       <header className="px-5 pt-5 pb-4 flex items-center justify-between sticky top-0 z-30 bg-background/95 backdrop-blur border-b hairline">
+        <button
+          onClick={() => (typeof window !== "undefined" && window.history.length > 1 ? window.history.back() : null)}
+          className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground"
+          aria-label="back"
+        >
+          ← back
+        </button>
         <Logo size="sm" />
-        <Link to="/" className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">leave</Link>
+        <Link to="/" className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground">leave</Link>
       </header>
 
       {error && (
