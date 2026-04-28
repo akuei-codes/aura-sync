@@ -1,6 +1,6 @@
 // React hook: live session data via Supabase Realtime + initial fetch via server fn.
 import { useEffect, useState } from "react";
-import { initRealtime } from "@/lib/realtime.client";
+import { initRealtime } from "@/lib/realtime";
 import { getRealtimeConfig, getQueue, getSession } from "@/lib/sessions.functions";
 
 export interface QueueItem {
