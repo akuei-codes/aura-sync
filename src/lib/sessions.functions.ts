@@ -134,13 +134,24 @@ export const requestTrack = createServerFn({ method: "POST" })
     if (dup.length > 0) return { id: dup[0].id, duplicate: true };
 
     const token = await getSessionAccessToken(sessionId);
-    const [track] = await Promise.all([
-      fetch(`https://api.spotify.com/v1/tracks/${data.spotifyTrackId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => r.json() as Promise<SpotifyTrack>),
-    ]);
-    const features = await getAudioFeatures(token, [data.spotifyTrackId]);
-    const f = features[0];
+    const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${data.spotifyTrackId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!trackRes.ok) {
+      throw new Error(`Could not load track from Spotify (${trackRes.status}). Try another track.`);
+    }
+    const track = (await trackRes.json()) as SpotifyTrack;
+
+    // Audio features API is deprecated for newly-created Spotify apps (Nov 2024).
+    // Treat failures as soft — we just lose the BPM/key/energy data for AI mixing on this track.
+    let f: { tempo?: number | null; key?: number | null; mode?: number | null; energy?: number | null; danceability?: number | null } | undefined;
+    try {
+      const features = await getAudioFeatures(token, [data.spotifyTrackId]);
+      f = features[0];
+    } catch (err) {
+      console.warn("Audio features unavailable for", data.spotifyTrackId, err);
+      f = undefined;
+    }
 
     const inserted = await sql<Array<{ id: string }>>`
       insert into public.queue_items (

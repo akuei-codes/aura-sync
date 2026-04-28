@@ -48,6 +48,8 @@ function Audience() {
     id: string; name: string; artists: Array<{ name: string }>; album: { images: Array<{ url: string }> };
   }>>([]);
   const [searching, setSearching] = useState(false);
+  const [queueMsg, setQueueMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [queueing, setQueueing] = useState<string | null>(null);
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   const clientId = useMemo(() => getClientId(), []);
@@ -124,14 +126,22 @@ function Audience() {
   }, [search, slug]);
 
   async function queueRequest(spotifyTrackId: string) {
-    if (!slug) return;
+    if (!slug || queueing) return;
+    setQueueing(spotifyTrackId);
+    setQueueMsg(null);
     try {
-      await requestTrack({ data: { slug, spotifyTrackId } });
+      const res = await requestTrack({ data: { slug, spotifyTrackId } });
       setSearch("");
       setSearchResults([]);
       setTab("vote");
+      setQueueMsg({ kind: "ok", text: res.duplicate ? "Already in queue — bumped." : "Queued. The DJ feels it." });
+      setTimeout(() => setQueueMsg(null), 3500);
     } catch (e) {
-      console.error(e);
+      const msg = e instanceof Error ? e.message : "Could not queue track.";
+      console.error("queueRequest failed:", e);
+      setQueueMsg({ kind: "err", text: msg });
+    } finally {
+      setQueueing(null);
     }
   }
 
@@ -153,8 +163,15 @@ function Audience() {
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden noise max-w-md mx-auto border-x hairline">
       <header className="px-5 pt-5 pb-4 flex items-center justify-between sticky top-0 z-30 bg-background/95 backdrop-blur border-b hairline">
+        <button
+          onClick={() => (typeof window !== "undefined" && window.history.length > 1 ? window.history.back() : null)}
+          className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground"
+          aria-label="back"
+        >
+          ← back
+        </button>
         <Logo size="sm" />
-        <Link to="/" className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">leave</Link>
+        <Link to="/" className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground">leave</Link>
       </header>
 
       {error && (
@@ -298,6 +315,12 @@ function Audience() {
             {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground">...</span>}
           </div>
 
+          {queueMsg && (
+            <div className={`mt-3 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.2em] border hairline ${queueMsg.kind === "ok" ? "bg-foreground text-background" : "bg-destructive/20 text-foreground border-destructive"}`}>
+              {queueMsg.text}
+            </div>
+          )}
+
           <ul className="mt-4 space-y-2">
             {searchResults.map((t) => (
               <li key={t.id} className="border hairline p-3 flex items-center gap-3 bg-card">
@@ -310,9 +333,10 @@ function Audience() {
                 </div>
                 <button
                   onClick={() => queueRequest(t.id)}
-                  className="px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors"
+                  disabled={queueing === t.id}
+                  className="px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
                 >
-                  + queue
+                  {queueing === t.id ? "..." : "+ queue"}
                 </button>
               </li>
             ))}
