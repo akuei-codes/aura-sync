@@ -48,6 +48,8 @@ function Audience() {
     id: string; name: string; artists: Array<{ name: string }>; album: { images: Array<{ url: string }> };
   }>>([]);
   const [searching, setSearching] = useState(false);
+  const [queueMsg, setQueueMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [queueing, setQueueing] = useState<string | null>(null);
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   const clientId = useMemo(() => getClientId(), []);
@@ -124,14 +126,22 @@ function Audience() {
   }, [search, slug]);
 
   async function queueRequest(spotifyTrackId: string) {
-    if (!slug) return;
+    if (!slug || queueing) return;
+    setQueueing(spotifyTrackId);
+    setQueueMsg(null);
     try {
-      await requestTrack({ data: { slug, spotifyTrackId } });
+      const res = await requestTrack({ data: { slug, spotifyTrackId } });
       setSearch("");
       setSearchResults([]);
       setTab("vote");
+      setQueueMsg({ kind: "ok", text: res.duplicate ? "Already in queue — bumped." : "Queued. The DJ feels it." });
+      setTimeout(() => setQueueMsg(null), 3500);
     } catch (e) {
-      console.error(e);
+      const msg = e instanceof Error ? e.message : "Could not queue track.";
+      console.error("queueRequest failed:", e);
+      setQueueMsg({ kind: "err", text: msg });
+    } finally {
+      setQueueing(null);
     }
   }
 
