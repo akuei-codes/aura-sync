@@ -4,19 +4,27 @@ import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-4 overflow-hidden noise">
+      <div className="absolute inset-0 bg-gradient-spotlight pointer-events-none" />
+      <div className="relative max-w-lg text-center">
+        <div className="font-display text-[10rem] md:text-[14rem] font-bold leading-none text-gradient-zynk glitch">404</div>
+        <div className="text-[10px] font-mono uppercase tracking-[0.5em] text-muted-foreground">signal lost · off the grid</div>
+        <h2 className="mt-6 font-display text-3xl font-bold">This room doesn't exist.</h2>
+        <p className="mt-3 text-sm text-muted-foreground">
+          The booth, the crowd, the projector — none of them know this address.
         </p>
-        <div className="mt-6">
+        <div className="mt-8 flex items-center justify-center gap-3">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="px-5 py-3 bg-foreground text-background font-mono uppercase text-[10px] tracking-[0.4em] clip-corner hover:bg-muted-foreground transition-colors"
           >
-            Go home
+            ↩ home
+          </Link>
+          <Link
+            to="/connect"
+            className="px-5 py-3 border border-foreground font-mono uppercase text-[10px] tracking-[0.4em] clip-corner hover:bg-foreground hover:text-background transition-colors"
+          >
+            start a session
           </Link>
         </div>
       </div>
