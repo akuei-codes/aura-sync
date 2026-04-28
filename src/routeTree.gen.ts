@@ -15,6 +15,8 @@ import { Route as DjRouteImport } from './routes/dj'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as AudienceRouteImport } from './routes/audience'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiSpotifyLoginRouteImport } from './routes/api.spotify.login'
+import { Route as ApiSpotifyCallbackRouteImport } from './routes/api.spotify.callback'
 
 const RecapRoute = RecapRouteImport.update({
   id: '/recap',
@@ -46,6 +48,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSpotifyLoginRoute = ApiSpotifyLoginRouteImport.update({
+  id: '/api/spotify/login',
+  path: '/api/spotify/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSpotifyCallbackRoute = ApiSpotifyCallbackRouteImport.update({
+  id: '/api/spotify/callback',
+  path: '/api/spotify/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +66,8 @@ export interface FileRoutesByFullPath {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
+  '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +76,8 @@ export interface FileRoutesByTo {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
+  '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +87,30 @@ export interface FileRoutesById {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
+  '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/audience' | '/connect' | '/dj' | '/projection' | '/recap'
+  fullPaths:
+    | '/'
+    | '/audience'
+    | '/connect'
+    | '/dj'
+    | '/projection'
+    | '/recap'
+    | '/api/spotify/callback'
+    | '/api/spotify/login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/audience' | '/connect' | '/dj' | '/projection' | '/recap'
+  to:
+    | '/'
+    | '/audience'
+    | '/connect'
+    | '/dj'
+    | '/projection'
+    | '/recap'
+    | '/api/spotify/callback'
+    | '/api/spotify/login'
   id:
     | '__root__'
     | '/'
@@ -85,6 +119,8 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/api/spotify/callback'
+    | '/api/spotify/login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,6 +130,8 @@ export interface RootRouteChildren {
   DjRoute: typeof DjRoute
   ProjectionRoute: typeof ProjectionRoute
   RecapRoute: typeof RecapRoute
+  ApiSpotifyCallbackRoute: typeof ApiSpotifyCallbackRoute
+  ApiSpotifyLoginRoute: typeof ApiSpotifyLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/spotify/login': {
+      id: '/api/spotify/login'
+      path: '/api/spotify/login'
+      fullPath: '/api/spotify/login'
+      preLoaderRoute: typeof ApiSpotifyLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/spotify/callback': {
+      id: '/api/spotify/callback'
+      path: '/api/spotify/callback'
+      fullPath: '/api/spotify/callback'
+      preLoaderRoute: typeof ApiSpotifyCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -150,6 +202,8 @@ const rootRouteChildren: RootRouteChildren = {
   DjRoute: DjRoute,
   ProjectionRoute: ProjectionRoute,
   RecapRoute: RecapRoute,
+  ApiSpotifyCallbackRoute: ApiSpotifyCallbackRoute,
+  ApiSpotifyLoginRoute: ApiSpotifyLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
