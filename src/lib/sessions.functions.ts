@@ -158,11 +158,11 @@ export const requestTrack = createServerFn({ method: "POST" })
         session_id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
         duration_ms, bpm, key_pitch_class, mode, energy, danceability, requested_by
       ) values (
-        ${sessionId}, ${track.id}, ${track.uri}, ${track.name},
-        ${track.artists.map((a) => a.name).join(", ")},
-        ${track.album.images[0]?.url ?? null},
-        ${track.preview_url},
-        ${track.duration_ms},
+        ${sessionId}, ${track.id}, ${track.uri ?? null}, ${track.name ?? "Unknown"},
+        ${track.artists?.map((a) => a.name).join(", ") ?? "Unknown"},
+        ${track.album?.images?.[0]?.url ?? null},
+        ${track.preview_url ?? null},
+        ${track.duration_ms ?? 0},
         ${f?.tempo ?? null},
         ${f?.key ?? null},
         ${f?.mode ?? null},
