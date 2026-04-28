@@ -171,7 +171,7 @@ export const getQueue = createServerFn({ method: "GET" })
       select id from public.sessions where slug = ${data.slug} limit 1
     `;
     if (sessionRows.length === 0) return [];
-    return sql`
+    return sql<Array<Record<string, unknown>>>`
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
              duration_ms, bpm, key_pitch_class, mode, energy, vote_count, requested_by, ai_picked
       from public.queue_items
