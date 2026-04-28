@@ -171,7 +171,23 @@ export const getQueue = createServerFn({ method: "GET" })
       select id from public.sessions where slug = ${data.slug} limit 1
     `;
     if (sessionRows.length === 0) return [];
-    return sql<Array<Record<string, unknown>>>`
+    return sql<Array<{
+      id: string;
+      spotify_track_id: string | null;
+      uri: string | null;
+      title: string | null;
+      artist: string | null;
+      album_image_url: string | null;
+      preview_url: string | null;
+      duration_ms: number | null;
+      bpm: number | null;
+      key_pitch_class: number | null;
+      mode: number | null;
+      energy: number | null;
+      vote_count: number;
+      requested_by: string | null;
+      ai_picked: boolean;
+    }>>`
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
              duration_ms, bpm, key_pitch_class, mode, energy, vote_count, requested_by, ai_picked
       from public.queue_items
