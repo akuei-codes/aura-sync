@@ -59,6 +59,7 @@ function DJ() {
         <div className="flex items-center gap-3">
           <NavPill to="/audience" label="Audience" />
           <NavPill to="/projection" label="Projection" />
+          <NavPill to="/recap" label="Recap" />
           <NavPill to="/" label="↩ Exit" />
         </div>
       </header>

@@ -23,12 +23,13 @@ function Landing() {
           <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
           <a href="#views" className="hover:text-foreground transition-colors">The views</a>
           <Link to="/dj" className="hover:text-foreground transition-colors">DJ booth</Link>
+          <Link to="/recap" className="hover:text-foreground transition-colors">Recap</Link>
         </nav>
         <Link
-          to="/dj"
+          to="/connect"
           className="text-xs font-mono uppercase tracking-[0.3em] border border-foreground px-4 py-2 hover:bg-foreground hover:text-background transition-colors clip-corner"
         >
-          Enter the booth →
+          Start a session →
         </Link>
       </header>
 
@@ -54,16 +55,18 @@ function Landing() {
             </p>
             <div className="flex flex-col gap-4 md:items-end">
               <div className="flex gap-3">
-                <Link to="/dj" className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.3em] hover:bg-muted-foreground transition-colors clip-corner">
-                  DJ dashboard
+                <Link to="/connect" className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.3em] hover:bg-muted-foreground transition-colors clip-corner">
+                  Start a session
                 </Link>
                 <Link to="/audience" className="px-6 py-4 border border-foreground font-mono uppercase text-xs tracking-[0.3em] hover:bg-foreground hover:text-background transition-colors clip-corner">
-                  Audience view
+                  Join as audience
                 </Link>
               </div>
-              <Link to="/projection" className="text-xs font-mono uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground transition-colors">
-                ↳ Open projection (fullscreen)
-              </Link>
+              <div className="flex gap-4 text-xs font-mono uppercase tracking-[0.3em] text-muted-foreground">
+                <Link to="/projection" className="hover:text-foreground transition-colors">↳ projection</Link>
+                <Link to="/dj" className="hover:text-foreground transition-colors">↳ booth</Link>
+                <Link to="/recap" className="hover:text-foreground transition-colors">↳ recap</Link>
+              </div>
             </div>
           </div>
         </div>
