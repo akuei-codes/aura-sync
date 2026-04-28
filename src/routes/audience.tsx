@@ -14,7 +14,7 @@ export const Route = createFileRoute("/audience")({
   component: Audience,
 });
 
-type Floater = { id: number; emoji: string; left: number; delay: number };
+type Floater = { id: number; bornAt: number; emoji: string; left: number; delay: number };
 
 function Audience() {
   const [energy, setEnergy] = useState(72);
@@ -41,14 +41,16 @@ function Audience() {
   // Auto-clear floaters
   useEffect(() => {
     const t = setInterval(() => {
-      setFloaters((f) => f.filter((x) => Date.now() - x.id < 3500));
+      const now = Date.now();
+      setFloaters((f) => f.filter((x) => now - x.bornAt < 3500));
     }, 800);
     return () => clearInterval(t);
   }, []);
 
   function react(emoji: string) {
-    const id = Date.now() + Math.random();
-    setFloaters((f) => [...f, { id, emoji, left: 10 + Math.random() * 80, delay: 0 }]);
+    const bornAt = Date.now();
+    const id = bornAt + Math.floor(Math.random() * 1e6);
+    setFloaters((f) => [...f, { id, bornAt, emoji, left: 10 + Math.random() * 80, delay: 0 }]);
     setEnergy((e) => Math.min(100, e + 1.5));
   }
 

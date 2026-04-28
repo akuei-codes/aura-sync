@@ -9,11 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RecapRouteImport } from './routes/recap'
 import { Route as ProjectionRouteImport } from './routes/projection'
 import { Route as DjRouteImport } from './routes/dj'
+import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as AudienceRouteImport } from './routes/audience'
 import { Route as IndexRouteImport } from './routes/index'
 
+const RecapRoute = RecapRouteImport.update({
+  id: '/recap',
+  path: '/recap',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectionRoute = ProjectionRouteImport.update({
   id: '/projection',
   path: '/projection',
@@ -22,6 +29,11 @@ const ProjectionRoute = ProjectionRouteImport.update({
 const DjRoute = DjRouteImport.update({
   id: '/dj',
   path: '/dj',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectRoute = ConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AudienceRoute = AudienceRouteImport.update({
@@ -38,39 +50,54 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audience': typeof AudienceRoute
+  '/connect': typeof ConnectRoute
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
+  '/recap': typeof RecapRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audience': typeof AudienceRoute
+  '/connect': typeof ConnectRoute
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
+  '/recap': typeof RecapRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audience': typeof AudienceRoute
+  '/connect': typeof ConnectRoute
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
+  '/recap': typeof RecapRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/audience' | '/dj' | '/projection'
+  fullPaths: '/' | '/audience' | '/connect' | '/dj' | '/projection' | '/recap'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/audience' | '/dj' | '/projection'
-  id: '__root__' | '/' | '/audience' | '/dj' | '/projection'
+  to: '/' | '/audience' | '/connect' | '/dj' | '/projection' | '/recap'
+  id: '__root__' | '/' | '/audience' | '/connect' | '/dj' | '/projection' | '/recap'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AudienceRoute: typeof AudienceRoute
+  ConnectRoute: typeof ConnectRoute
   DjRoute: typeof DjRoute
   ProjectionRoute: typeof ProjectionRoute
+  RecapRoute: typeof RecapRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/recap': {
+      id: '/recap'
+      path: '/recap'
+      fullPath: '/recap'
+      preLoaderRoute: typeof RecapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projection': {
       id: '/projection'
       path: '/projection'
@@ -83,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/dj'
       fullPath: '/dj'
       preLoaderRoute: typeof DjRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connect': {
+      id: '/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audience': {
@@ -105,8 +139,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AudienceRoute: AudienceRoute,
+  ConnectRoute: ConnectRoute,
   DjRoute: DjRoute,
   ProjectionRoute: ProjectionRoute,
+  RecapRoute: RecapRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
