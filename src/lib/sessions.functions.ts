@@ -16,6 +16,7 @@ export const getRealtimeConfig = createServerFn({ method: "GET" }).handler(async
   const rawUrl = process.env.REALTIME_URL ?? process.env.SUPABASE_URL;
   const key = process.env.REALTIME_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
   const url = rawUrl
+    ?.replace(/\/rest\/v1\/realtime\/v1\/?$/i, "")
     ?.replace(/\/rest\/v1\/?$/i, "")
     .replace(/\/realtime\/v1\/?$/i, "")
     .replace(/\/$/, "");
