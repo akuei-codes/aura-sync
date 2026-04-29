@@ -43,29 +43,7 @@ function fmt(ms: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-declare global {
-  interface Window {
-    Spotify?: {
-      Player: new (opts: {
-        name: string;
-        getOAuthToken: (cb: (token: string) => void) => void;
-        volume?: number;
-      }) => SpotifyPlayer;
-    };
-    onSpotifyWebPlaybackSDKReady?: () => void;
-  }
-}
-
-interface SpotifyPlayer {
-  connect(): Promise<boolean>;
-  disconnect(): void;
-  addListener(event: string, cb: (data: unknown) => void): void;
-  removeListener(event: string): void;
-  togglePlay(): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  getCurrentState(): Promise<{ position: number; duration: number; paused: boolean } | null>;
-}
+import "@/lib/spotify-sdk";
 
 function DJ() {
   const { slug, token, warn } = Route.useSearch();

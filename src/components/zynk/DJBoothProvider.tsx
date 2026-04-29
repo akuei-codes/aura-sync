@@ -17,31 +17,8 @@ import {
 } from "@/lib/sessions.functions";
 import { playRiser, playDrop, playSweepDown, unlockSfx } from "@/lib/sfx";
 import { speakCallout, stopCallout } from "@/lib/dj-voice";
-
-declare global {
-  interface Window {
-    Spotify?: {
-      Player: new (opts: {
-        name: string;
-        getOAuthToken: (cb: (token: string) => void) => void;
-        volume?: number;
-      }) => SpotifyPlayer;
-    };
-    onSpotifyWebPlaybackSDKReady?: () => void;
-  }
-}
-
-interface SpotifyPlayer {
-  connect(): Promise<boolean>;
-  disconnect(): void;
-  addListener(event: string, cb: (data: unknown) => void): void;
-  removeListener(event: string): void;
-  togglePlay(): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  setVolume(v: number): Promise<void>;
-  getCurrentState(): Promise<{ position: number; duration: number; paused: boolean } | null>;
-}
+import type { SpotifyPlayer } from "@/lib/spotify-sdk";
+import "@/lib/spotify-sdk";
 
 interface DJBoothContextValue {
   active: boolean;
