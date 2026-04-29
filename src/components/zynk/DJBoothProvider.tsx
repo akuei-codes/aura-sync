@@ -15,8 +15,8 @@ import {
   getCurrentTrack,
   getSession,
 } from "@/lib/sessions.functions";
-import { playRiser, playDrop, playSweepDown, unlockSfx } from "@/lib/sfx";
-import { speakCallout, stopCallout } from "@/lib/dj-voice";
+import { playRiser, playDrop, playSweepDown, playScratch, playImpact, playIntroSequence, playTransitionSequence, unlockSfx } from "@/lib/sfx";
+import { speakCallout, stopCallout, prewarmDjVoice } from "@/lib/dj-voice";
 import "@/lib/spotify-sdk";
 
 interface DJBoothContextValue {
