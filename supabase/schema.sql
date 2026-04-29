@@ -295,11 +295,26 @@ create index if not exists recap_session_idx
 -- ----------------------------------------------------------------------------
 -- Frontend subscribes via `supabase.channel(...).on('postgres_changes', ...)`
 -- to the tables it cares about. Only enabled for tables the audience watches.
-alter publication supabase_realtime add table public.queue_items;
-alter publication supabase_realtime add table public.reactions;
-alter publication supabase_realtime add table public.hype_events;
-alter publication supabase_realtime add table public.current_track;
-alter publication supabase_realtime add table public.sessions;
+do $$
+begin
+  alter publication supabase_realtime add table public.queue_items;
+exception when duplicate_object then null; end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.reactions;
+exception when duplicate_object then null; end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.hype_events;
+exception when duplicate_object then null; end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.current_track;
+exception when duplicate_object then null; end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.sessions;
+exception when duplicate_object then null; end $$;
 
 -- ----------------------------------------------------------------------------
 -- ROW LEVEL SECURITY
