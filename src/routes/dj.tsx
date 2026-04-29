@@ -218,16 +218,19 @@ function DJ() {
 
   // When the Spotify device becomes ready after the room is already ignited
   // (host ignited before SDK loaded, or page was refreshed), kick playback of
-  // the current track on the device so audio actually starts.
+  // the current track on the device so audio actually starts. Only do this for
+  // "stale" current_track rows — fresh advances already start playback server-side.
   const resumedTrackRef = useRef<string | null>(null);
   useEffect(() => {
     if (!session?.ignited || !deviceReady || !current || !token) return;
     if (resumedTrackRef.current === current.spotify_track_id) return;
+    const ageMs = Date.now() - new Date(current.position_set_at).getTime();
+    if (ageMs < 3000) { resumedTrackRef.current = current.spotify_track_id; return; }
     resumedTrackRef.current = current.spotify_track_id;
     resumeCurrentOnDevice({ data: { sessionId: session.id, djToken: token } }).catch(() => {
       resumedTrackRef.current = null;
     });
-  }, [session?.ignited, deviceReady, current?.spotify_track_id, token]);
+  }, [session?.ignited, deviceReady, current?.spotify_track_id, current?.position_set_at, token]);
 
   async function ignite() {
     if (!session || !token || igniting) return;
