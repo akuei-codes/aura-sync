@@ -17,6 +17,10 @@ export const getRealtimeConfig = createServerFn({ method: "GET" }).handler(async
   const key = process.env.REALTIME_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
   const url = rawUrl
     ? rawUrl
+        .replace(/^wss:/i, "https:")
+        .replace(/^ws:/i, "http:")
+        .replace(/[?#].*$/, "")
+        .replace(/\/websocket\/?$/i, "")
         .replace(/\/rest\/v1\/realtime\/v1\/?$/i, "")
         .replace(/\/rest\/v1\/?$/i, "")
         .replace(/\/realtime\/v1\/?$/i, "")
