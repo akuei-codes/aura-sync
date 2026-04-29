@@ -203,10 +203,66 @@ export const getQueue = createServerFn({ method: "GET" })
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
              duration_ms, bpm, key_pitch_class, mode, energy, vote_count, requested_by, ai_picked
       from public.queue_items
-      where session_id = ${sessionRows[0].id} and played_at is null
+      where session_id = ${sessionRows[0].id} and played_at is null and approved = true and rejected_at is null
       order by vote_count desc, created_at asc
       limit 50
     `;
+  });
+
+// ---- Pending requests (DJ moderation) --------------------------------------
+export const getPendingRequests = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    return sql<Array<{
+      id: string; spotify_track_id: string; title: string; artist: string;
+      album_image_url: string | null; requested_by: string | null; created_at: Date;
+    }>>`
+      select id, spotify_track_id, title, artist, album_image_url, requested_by, created_at
+      from public.queue_items
+      where session_id = ${data.sessionId}
+        and played_at is null and approved = false and rejected_at is null
+      order by created_at asc
+      limit 50
+    `;
+  });
+
+export const approveRequest = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), queueItemId: z.string().uuid() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.queue_items set approved = true where id = ${data.queueItemId} and session_id = ${data.sessionId}`;
+    return { ok: true };
+  });
+
+export const rejectRequest = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), queueItemId: z.string().uuid() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.queue_items set rejected_at = now() where id = ${data.queueItemId} and session_id = ${data.sessionId}`;
+    return { ok: true };
+  });
+
+export const setAutoApprove = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), enabled: z.boolean() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.sessions set auto_approve = ${data.enabled} where id = ${data.sessionId}`;
+    // when toggling ON, auto-approve everything pending
+    if (data.enabled) {
+      await sql`update public.queue_items set approved = true
+        where session_id = ${data.sessionId} and played_at is null and rejected_at is null and approved = false`;
+    }
+    return { ok: true };
+  });
+
+export const igniteRoom = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.sessions set ignited = true, autopilot = true,
+      started_at = coalesce(started_at, now()), status = 'live' where id = ${data.sessionId}`;
+    return { ok: true };
   });
 
 // ---- Vote ------------------------------------------------------------------
