@@ -120,19 +120,20 @@ export const requestTrack = createServerFn({ method: "POST" })
     }).parse,
   )
   .handler(async ({ data }) => {
-    const sessionRows = await sql<Array<{ id: string }>>`
-      select id from public.sessions where slug = ${data.slug} limit 1
+    const sessionRows = await sql<Array<{ id: string; auto_approve: boolean }>>`
+      select id, auto_approve from public.sessions where slug = ${data.slug} limit 1
     `;
     if (sessionRows.length === 0) throw new Error("Session not found");
     const sessionId = sessionRows[0].id;
+    const autoApprove = sessionRows[0].auto_approve;
 
     // Already in pending queue?
-    const dup = await sql<Array<{ id: string }>>`
-      select id from public.queue_items
+    const dup = await sql<Array<{ id: string; approved: boolean }>>`
+      select id, approved from public.queue_items
       where session_id = ${sessionId} and spotify_track_id = ${data.spotifyTrackId} and played_at is null
       limit 1
     `;
-    if (dup.length > 0) return { id: dup[0].id, duplicate: true };
+    if (dup.length > 0) return { id: dup[0].id, duplicate: true, approved: dup[0].approved };
 
     const token = await getSessionAccessToken(sessionId);
     const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${data.spotifyTrackId}`, {
@@ -143,8 +144,6 @@ export const requestTrack = createServerFn({ method: "POST" })
     }
     const track = (await trackRes.json()) as SpotifyTrack;
 
-    // Audio features API is deprecated for newly-created Spotify apps (Nov 2024).
-    // Treat failures as soft — we just lose the BPM/key/energy data for AI mixing on this track.
     let f: { tempo?: number | null; key?: number | null; mode?: number | null; energy?: number | null; danceability?: number | null } | undefined;
     try {
       const features = await getAudioFeatures(token, [data.spotifyTrackId]);
@@ -157,7 +156,7 @@ export const requestTrack = createServerFn({ method: "POST" })
     const inserted = await sql<Array<{ id: string }>>`
       insert into public.queue_items (
         session_id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
-        duration_ms, bpm, key_pitch_class, mode, energy, danceability, requested_by
+        duration_ms, bpm, key_pitch_class, mode, energy, danceability, requested_by, approved
       ) values (
         ${sessionId}, ${track.id}, ${track.uri ?? null}, ${track.name ?? "Unknown"},
         ${track.artists?.map((a) => a.name).join(", ") ?? "Unknown"},
@@ -169,10 +168,11 @@ export const requestTrack = createServerFn({ method: "POST" })
         ${f?.mode ?? null},
         ${f?.energy ?? null},
         ${f?.danceability ?? null},
-        ${data.requestedBy ?? null}
+        ${data.requestedBy ?? null},
+        ${autoApprove}
       ) returning id
     `;
-    return { id: inserted[0].id, duplicate: false };
+    return { id: inserted[0].id, duplicate: false, approved: autoApprove };
   });
 
 // ---- Get queue -------------------------------------------------------------
