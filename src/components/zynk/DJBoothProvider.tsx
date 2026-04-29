@@ -308,6 +308,17 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
       try {
         const session = await getSession({ data: { slug: hostSlug } });
         if (!session) return;
+        // Detect ignite transition -> play full intro sequence + ignite callout
+        if (session.ignited && !lastIgnitedRef.current) {
+          lastIgnitedRef.current = true;
+          unlockSfx();
+          playIntroSequence();
+          setTimeout(() => {
+            void speakCallout("ignite", { onDuck: duck, onUnduck: unduck, force: true });
+          }, 4500);
+        } else if (!session.ignited) {
+          lastIgnitedRef.current = false;
+        }
         const e = session.crowd_energy ?? 0;
         // More sensitive: energy spikes trigger hype sooner
         if (e - lastEnergyRef.current > 0.1 && e > 0.55) {
