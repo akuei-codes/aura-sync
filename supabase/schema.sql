@@ -295,22 +295,11 @@ create index if not exists recap_session_idx
 -- ----------------------------------------------------------------------------
 -- Frontend subscribes via `supabase.channel(...).on('postgres_changes', ...)`
 -- to the tables it cares about. Only enabled for tables the audience watches.
-do $$
-declare
-  t text;
-begin
-  foreach t in array array['queue_items','reactions','hype_events','current_track','sessions']
-  loop
-    if not exists (
-      select 1 from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = t
-    ) then
-      execute format('alter publication supabase_realtime add table public.%I', t);
-    end if;
-  end loop;
-end $$;
+alter publication supabase_realtime add table public.queue_items;
+alter publication supabase_realtime add table public.reactions;
+alter publication supabase_realtime add table public.hype_events;
+alter publication supabase_realtime add table public.current_track;
+alter publication supabase_realtime add table public.sessions;
 
 -- ----------------------------------------------------------------------------
 -- ROW LEVEL SECURITY
