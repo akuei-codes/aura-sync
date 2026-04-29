@@ -43,6 +43,7 @@ function fmt(ms: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
+import type { SpotifyPlayer } from "@/lib/spotify-sdk";
 import "@/lib/spotify-sdk";
 
 function DJ() {
