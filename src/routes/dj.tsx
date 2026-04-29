@@ -70,7 +70,7 @@ interface SpotifyPlayer {
 function DJ() {
   const { slug, token, warn } = Route.useSearch();
   const noSession = !slug || !token;
-  const { session, queue, current, hype, error } = useLiveSession(slug ?? null);
+  const { session, queue, current, hype, error, refresh } = useLiveSession(slug ?? null);
   const [autopilot, setLocalAutopilot] = useState(true);
   const [autoApprove, setLocalAutoApprove] = useState(true);
   const [energyLocal, setEnergyLocal] = useState(0.55);
@@ -238,6 +238,7 @@ function DJ() {
     try {
       await igniteRoomFn({ data: { sessionId: session.id, djToken: token } });
       await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+      await refresh();
     } catch (e) {
       setPlayerError(e instanceof Error ? e.message : "ignite failed");
     } finally {
@@ -261,7 +262,7 @@ function DJ() {
   async function approve(id: string) {
     if (!session || !token) return;
     setPending((p) => p.filter((x) => x.id !== id));
-    await approveRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).catch(() => {});
+    await approveRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).then(() => refresh()).catch(() => {});
   }
   async function reject(id: string) {
     if (!session || !token) return;
@@ -273,6 +274,7 @@ function DJ() {
     const next = !autoApprove;
     setLocalAutoApprove(next);
     await setAutoApproveFn({ data: { sessionId: session.id, djToken: token, enabled: next } });
+    await refresh();
   }
 
   if (noSession) {
@@ -442,6 +444,7 @@ function DJ() {
                   setAdvancing(true);
                   try {
                     await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+                    await refresh();
                   } catch (e) {
                     setPlayerError(e instanceof Error ? e.message : "advance failed");
                   } finally {

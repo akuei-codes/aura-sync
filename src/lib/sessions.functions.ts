@@ -13,8 +13,23 @@ import { pickNextTrack, nextEnergyTarget, generateHypeCopy } from "@/lib/ai-dj.s
 
 // ---- Realtime config (exposed safely to client) ----------------------------
 export const getRealtimeConfig = createServerFn({ method: "GET" }).handler(async () => {
-  const url = process.env.REALTIME_URL;
-  const key = process.env.REALTIME_PUBLISHABLE_KEY;
+  const rawUrl = process.env.REALTIME_URL ?? process.env.SUPABASE_URL;
+  const key = process.env.REALTIME_PUBLISHABLE_KEY
+    ?? process.env.SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.SUPABASE_ANON_KEY
+    ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.VITE_SUPABASE_ANON_KEY;
+  const url = rawUrl
+    ? rawUrl
+        .replace(/^wss:/i, "https:")
+        .replace(/^ws:/i, "http:")
+        .replace(/[?#].*$/, "")
+        .replace(/\/websocket\/?$/i, "")
+        .replace(/\/rest\/v1\/realtime\/v1\/?$/i, "")
+        .replace(/\/rest\/v1\/?$/i, "")
+        .replace(/\/realtime\/v1\/?$/i, "")
+        .replace(/\/$/, "")
+    : null;
   return { url: url ?? null, key: key ?? null };
 });
 
@@ -210,6 +225,34 @@ export const getQueue = createServerFn({ method: "GET" })
       order by vote_count desc, created_at asc
       limit 50
     `;
+  });
+
+// ---- Get currently playing track ------------------------------------------
+export const getCurrentTrack = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ slug: z.string().min(1) }).parse)
+  .handler(async ({ data }) => {
+    const rows = await sql<Array<{
+      spotify_track_id: string;
+      uri: string;
+      title: string;
+      artist: string;
+      album_image_url: string | null;
+      preview_url: string | null;
+      duration_ms: number;
+      bpm: number | null;
+      energy: number | null;
+      position_ms_at: number;
+      position_set_at: string;
+      is_paused: boolean;
+    }>>`
+      select ct.spotify_track_id, ct.uri, ct.title, ct.artist, ct.album_image_url, ct.preview_url,
+             ct.duration_ms, ct.bpm, ct.energy, ct.position_ms_at, ct.position_set_at::text as position_set_at, ct.is_paused
+      from public.current_track ct
+      join public.sessions s on s.id = ct.session_id
+      where s.slug = ${data.slug}
+      limit 1
+    `;
+    return rows[0] ?? null;
   });
 
 // ---- Pending requests (DJ moderation) --------------------------------------
