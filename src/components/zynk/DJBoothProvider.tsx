@@ -261,6 +261,9 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     try { await playerRef.current?.setVolume(0.85); } catch { /* ignore */ }
   }, []);
 
+  // Per-track speech budget: prevents the DJ from talking more than once per track.
+  const spokeOnThisTrackRef = useRef<boolean>(false);
+
   // ---- Core advance with smart crossfade & SFX -----------------------------
   const doAdvance = useCallback(async (opts: { withSfx?: boolean } = {}) => {
     if (advancingRef.current || !sessionId || !hostToken) return;
@@ -309,11 +312,10 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     }
   }, [sessionId, hostToken, duck, unduck]);
 
-  // Per-track speech budget: prevents the DJ from talking more than once per track.
-  const spokeOnThisTrackRef = useRef<boolean>(false);
-
   // ---- Energy/vote watchers — event-driven callouts ------------------------
   const lastEnergyRef = useRef<number>(0);
+  const lastReactionCountRef = useRef<number>(0);
+  const lastIgnitedRef = useRef<boolean>(false);
   const lastReactionCountRef = useRef<number>(0);
   const lastIgnitedRef = useRef<boolean>(false);
   useEffect(() => {
