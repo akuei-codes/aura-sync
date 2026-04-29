@@ -58,7 +58,7 @@ export function generateLine(kind: CalloutKind, ctx?: { trackTitle?: string }): 
 }
 
 let lastCalloutAt = 0;
-const MIN_GAP_MS = 12000; // never two callouts within 12s
+const MIN_GAP_MS = 5000; // never two callouts within 5s — keep the host alive
 let pickedVoice: string | null = null;
 
 function chosenVoice(): string {
@@ -93,7 +93,18 @@ export async function speakCallout(
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.volume = 1;
+    audio.volume = 1.0;
+    // Boost via WebAudio gain for true loudness above music
+    try {
+      const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      if (AC) {
+        const actx = new AC();
+        const src = actx.createMediaElementSource(audio);
+        const g = actx.createGain();
+        g.gain.value = 2.4; // amplify above 1.0
+        src.connect(g).connect(actx.destination);
+      }
+    } catch { /* fall back to plain audio */ }
     activeAudio = audio;
 
     opts.onDuck?.();

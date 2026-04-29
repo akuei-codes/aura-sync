@@ -41,9 +41,9 @@ export const Route = createFileRoute("/api/elevenlabs/tts")({
               text,
               model_id: "eleven_turbo_v2_5",
               voice_settings: {
-                stability: 0.4,
-                similarity_boost: 0.75,
-                style: 0.7,
+                stability: 0.35,
+                similarity_boost: 0.85,
+                style: 0.85,
                 use_speaker_boost: true,
               },
             }),

@@ -46,7 +46,8 @@ const STORAGE_KEY = "zynk_dj_host";
 function readStoredHost(): { slug: string; token: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    // Prefer sessionStorage (current tab), fall back to localStorage (resume after close)
+    const raw = sessionStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed?.slug && parsed?.token) return parsed;
@@ -56,12 +57,18 @@ function readStoredHost(): { slug: string; token: string } | null {
 
 function writeStoredHost(slug: string, token: string) {
   if (typeof window === "undefined") return;
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token })); } catch { /* ignore */ }
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token }));
+  } catch { /* ignore */ }
 }
 
 function clearStoredHost() {
   if (typeof window === "undefined") return;
-  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
 }
 
 export function DJBoothProvider({ children }: { children: React.ReactNode }) {
@@ -196,8 +203,8 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [active, sessionId, hostToken, deviceReady]);
 
-  // ---- Smart crossfade trigger: 12s before end, ramp down + advance --------
-  // Polls current_track every second so the autopilot survives navigation.
+  // ---- Smart crossfade trigger: at ~65% of duration OR <8s remaining --------
+  // We don't play full songs — cut earlier to keep energy moving.
   useEffect(() => {
     if (!active || !sessionId || !hostToken) return;
     const t = setInterval(async () => {
@@ -208,7 +215,9 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
         const elapsed = Date.now() - new Date(ct.position_set_at).getTime();
         const pos = ct.is_paused ? ct.position_ms_at : ct.position_ms_at + elapsed;
         const remaining = ct.duration_ms - pos;
-        if (remaining > 0 && remaining < 12000 && !advancingRef.current) {
+        const energyCutPoint = ct.duration_ms * 0.65; // play 65% of each track
+        const shouldCut = (pos >= energyCutPoint) || (remaining > 0 && remaining < 8000);
+        if (shouldCut && !advancingRef.current) {
           doAdvance({ withSfx: true });
         }
       } catch { /* ignore */ }
@@ -236,9 +245,9 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [active, deviceReady, sessionId, hostToken, hostSlug]);
 
-  // ---- Voice ducking helpers -----------------------------------------------
+  // ---- Voice ducking helpers (deep duck so DJ is front-of-mix) -------------
   const duck = useCallback(async () => {
-    try { await playerRef.current?.setVolume(0.18); } catch { /* ignore */ }
+    try { await playerRef.current?.setVolume(0.08); } catch { /* ignore */ }
   }, []);
   const unduck = useCallback(async () => {
     try { await playerRef.current?.setVolume(0.85); } catch { /* ignore */ }
@@ -293,6 +302,7 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
   // ---- Energy/vote watchers — event-driven callouts ------------------------
   const lastEnergyRef = useRef<number>(0);
   const lastReactionCountRef = useRef<number>(0);
+  const lastAmbientRef = useRef<number>(Date.now());
   useEffect(() => {
     if (!active || !hostSlug) return;
     const t = setInterval(async () => {
@@ -300,17 +310,24 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
         const session = await getSession({ data: { slug: hostSlug } });
         if (!session) return;
         const e = session.crowd_energy ?? 0;
-        if (e - lastEnergyRef.current > 0.18 && e > 0.7) {
+        // More sensitive: energy spikes trigger hype sooner
+        if (e - lastEnergyRef.current > 0.1 && e > 0.55) {
           void speakCallout("energy", { onDuck: duck, onUnduck: unduck });
         }
         lastEnergyRef.current = e;
         const r = session.reaction_count_total ?? 0;
-        if (r - lastReactionCountRef.current > 8) {
+        if (r - lastReactionCountRef.current > 4) {
           void speakCallout("fire", { onDuck: duck, onUnduck: unduck });
         }
         lastReactionCountRef.current = r;
+        // Periodic ambient hype every ~45s when ignited
+        if (session.ignited && Date.now() - lastAmbientRef.current > 45000) {
+          lastAmbientRef.current = Date.now();
+          const kinds: Array<"energy" | "fire" | "transition"> = ["energy", "fire", "transition"];
+          void speakCallout(kinds[Math.floor(Math.random() * kinds.length)], { onDuck: duck, onUnduck: unduck });
+        }
       } catch { /* ignore */ }
-    }, 6000);
+    }, 3000);
     return () => clearInterval(t);
   }, [active, hostSlug, duck, unduck]);
 

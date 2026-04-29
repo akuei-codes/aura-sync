@@ -100,7 +100,7 @@ export function useLiveSession(slug: string | null) {
           }
         };
 
-        const poll = window.setInterval(refreshSafely, 4000);
+        const poll = window.setInterval(refreshSafely, 1500);
         if (!cfg.url || !cfg.key) {
           setError(null);
           return () => window.clearInterval(poll);

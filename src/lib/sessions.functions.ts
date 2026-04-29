@@ -227,6 +227,74 @@ export const getQueue = createServerFn({ method: "GET" })
     `;
   });
 
+// ---- Get played history (recently played tracks) --------------------------
+export const getQueueHistory = createServerFn({ method: "GET" })
+  .inputValidator(z.object({ slug: z.string().min(1) }).parse)
+  .handler(async ({ data }) => {
+    const sessionRows = await sql<Array<{ id: string }>>`
+      select id from public.sessions where slug = ${data.slug} limit 1
+    `;
+    if (sessionRows.length === 0) return [];
+    return sql<Array<{
+      id: string;
+      spotify_track_id: string;
+      title: string;
+      artist: string;
+      album_image_url: string | null;
+      vote_count: number;
+      requested_by: string | null;
+      played_at: string;
+    }>>`
+      select id, spotify_track_id, title, artist, album_image_url, vote_count, requested_by,
+             played_at::text as played_at
+      from public.queue_items
+      where session_id = ${sessionRows[0].id} and played_at is not null
+      order by played_at desc
+      limit 30
+    `;
+  });
+
+// ---- Resume host: validate a list of {sessionId, djToken} and return live ones
+export const getHostSessions = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      entries: z.array(z.object({
+        sessionId: z.string().uuid(),
+        djToken: z.string().min(1),
+      })).max(50),
+    }).parse,
+  )
+  .handler(async ({ data }) => {
+    const out: Array<{
+      sessionId: string; slug: string; title: string; vibe: string; status: string;
+      djToken: string; ignited: boolean; started_at: string | null; created_at: string;
+      vote_count_total: number; mix_drop_count: number;
+    }> = [];
+    for (const entry of data.entries) {
+      const rows = await sql<Array<{
+        id: string; slug: string; title: string; vibe: string; status: string;
+        ignited: boolean; started_at: Date | null; created_at: Date;
+        vote_count_total: number; mix_drop_count: number;
+      }>>`
+        select id, slug, title, vibe, status, ignited, started_at, created_at,
+               vote_count_total, mix_drop_count
+        from public.sessions
+        where id = ${entry.sessionId} and dj_token_hash = ${sha256Hex(entry.djToken)}
+        limit 1
+      `;
+      if (rows.length === 0) continue;
+      const r = rows[0];
+      out.push({
+        sessionId: r.id, slug: r.slug, title: r.title, vibe: r.vibe, status: r.status,
+        djToken: entry.djToken, ignited: r.ignited,
+        started_at: r.started_at?.toISOString() ?? null,
+        created_at: r.created_at.toISOString(),
+        vote_count_total: r.vote_count_total, mix_drop_count: r.mix_drop_count,
+      });
+    }
+    return out.sort((a, b) => (b.created_at > a.created_at ? 1 : -1));
+  });
+
 // ---- Get currently playing track ------------------------------------------
 export const getCurrentTrack = createServerFn({ method: "GET" })
   .inputValidator(z.object({ slug: z.string().min(1) }).parse)
