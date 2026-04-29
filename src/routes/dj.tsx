@@ -13,6 +13,7 @@ import {
   igniteRoom as igniteRoomFn,
   setPlaybackPaused,
   syncPlaybackPosition,
+  resumeCurrentOnDevice,
   updateEnergy,
   getSpotifyAccessToken,
   getPendingRequests,
