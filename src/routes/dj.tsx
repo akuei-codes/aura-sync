@@ -373,8 +373,8 @@ function DJ() {
             </div>
           </section>
 
-          <section className="grid md:grid-cols-3 gap-6">
-            <ControlCard label="AI Autopilot" value={autopilot ? "ENGAGED" : "MANUAL"} accent>
+          <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <ControlCard label="AI Autopilot" value={autopilot ? "ON" : "OFF"} accent>
               <button
                 onClick={async () => {
                   if (!session || !token) return;
@@ -384,18 +384,27 @@ function DJ() {
                 }}
                 className={`mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border ${autopilot ? "bg-foreground text-background" : "border-foreground"}`}
               >
-                {autopilot ? "release control" : "let AI take over"}
+                {autopilot ? "release" : "engage"}
               </button>
             </ControlCard>
 
-            <ControlCard label="Energy Floor" value={Math.round(energyLocal * 100)}>
-              <input
-                type="range" min={0} max={100} value={Math.round(energyLocal * 100)}
-                onChange={(e) => setEnergyLocal(Number(e.target.value) / 100)}
-                onMouseUp={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
-                onTouchEnd={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
-                className="mt-4 w-full accent-white"
-              />
+            <ControlCard label="Auto-Approve" value={autoApprove ? "ON" : "REVIEW"}>
+              <button
+                onClick={toggleAutoApprove}
+                className={`mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border ${autoApprove ? "bg-foreground text-background" : "border-foreground"}`}
+              >
+                {autoApprove ? "review each one" : "auto-approve all"}
+              </button>
+            </ControlCard>
+
+            <ControlCard label={current?.is_paused ? "Paused" : "Playing"} value={deviceReady ? "READY" : "..."}>
+              <button
+                onClick={togglePlayPause}
+                disabled={!deviceReady || !current}
+                className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
+              >
+                {current?.is_paused ? "▶ play" : "⏸ pause"}
+              </button>
             </ControlCard>
 
             <ControlCard label="Drop Now" value={`${queue.length} queued`}>
@@ -414,9 +423,29 @@ function DJ() {
                 }}
                 className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
               >
-                {advancing ? "mixing…" : "drop now ⚡"}
+                {advancing ? "mixing…" : "skip ⚡"}
               </button>
             </ControlCard>
+          </section>
+
+          {/* Energy meter (own row, full width) */}
+          <section className="border hairline p-5 bg-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">crowd energy floor</div>
+                <div className="font-display text-3xl font-bold mt-1 tabular-nums">{Math.round(energyLocal * 100)}<span className="text-muted-foreground text-base">/100</span></div>
+              </div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground max-w-xs text-right">
+                AI raises this from reactions + votes — slider just sets a floor
+              </div>
+            </div>
+            <input
+              type="range" min={0} max={100} value={Math.round(energyLocal * 100)}
+              onChange={(e) => setEnergyLocal(Number(e.target.value) / 100)}
+              onMouseUp={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
+              onTouchEnd={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
+              className="mt-4 w-full accent-white"
+            />
           </section>
         </main>
 
