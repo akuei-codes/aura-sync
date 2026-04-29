@@ -3,7 +3,7 @@
 // Phrases are pre-cached as audio blobs at startup so transitions are instant.
 
 const VOICES = [
-  "iP95p4xoKVk53GoZ742B", // Chris — confident, clubby
+  "XSr0HH9U8dbZZaKq4Rmh", // Custom ZYNK DJ voice
 ];
 
 const TRANSITION_LINES = [

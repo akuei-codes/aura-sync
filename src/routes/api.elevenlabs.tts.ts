@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/elevenlabs/tts")({
         }
 
         const text = (body.text ?? "").trim();
-        const voiceId = (body.voiceId ?? "iP95p4xoKVk53GoZ742B").trim();
+        const voiceId = (body.voiceId ?? "XSr0HH9U8dbZZaKq4Rmh").trim();
         if (!text || text.length > 200) {
           return new Response("text required (1-200 chars)", { status: 400, headers: CORS });
         }
