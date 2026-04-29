@@ -60,6 +60,11 @@ create table if not exists public.sessions (
   crowd_energy                double precision not null default 0.55
                               check (crowd_energy between 0 and 1),
   autopilot                   boolean not null default true,
+  -- When true, every audience request goes straight into the live queue.
+  -- When false, requests land in pending and the host approves each one.
+  auto_approve                boolean not null default true,
+  -- Set true once the host hits "Ignite" — AI starts mixing.
+  ignited                     boolean not null default false,
   projection_mode             public.projection_mode not null default 'auto',
 
   -- Counters (maintained by triggers — never recount on read)
@@ -137,6 +142,9 @@ create table if not exists public.queue_items (
   ai_score            real,         -- AI DJ ranking score (0..1)
   -- ai_picked indicates this was inserted by the autopilot, not a request
   ai_picked           boolean not null default false,
+  -- approval status: pending requests don't show in audience queue and AI won't pick them
+  approved            boolean not null default true,
+  rejected_at         timestamptz,
   played_at           timestamptz,  -- null = still in queue, set = already played
   created_at          timestamptz not null default now(),
   unique (session_id, spotify_track_id, played_at)  -- one pending request per track
