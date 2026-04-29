@@ -66,7 +66,7 @@ export function useLiveSession(slug: string | null) {
     let cancelled = false;
     let channel: ReturnType<ReturnType<typeof initRealtime>["channel"]> | null = null;
 
-    async function bootstrap() {
+    async function bootstrap(): Promise<void | (() => void)> {
       try {
         const cfg = await getRealtimeConfig();
         const [s, q, c] = await Promise.all([
