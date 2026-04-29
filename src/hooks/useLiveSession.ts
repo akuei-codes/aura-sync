@@ -1,7 +1,7 @@
 // React hook: live session data via Supabase Realtime + initial fetch via server fn.
 import { useEffect, useState } from "react";
 import { initRealtime } from "@/lib/realtime";
-import { getRealtimeConfig, getQueue, getSession } from "@/lib/sessions.functions";
+import { getCurrentTrack, getRealtimeConfig, getQueue, getSession } from "@/lib/sessions.functions";
 
 export interface QueueItem {
   id: string;
@@ -69,15 +69,39 @@ export function useLiveSession(slug: string | null) {
     async function bootstrap() {
       try {
         const cfg = await getRealtimeConfig();
-        if (!cfg.url || !cfg.key) {
-          setError("Realtime not configured (REALTIME_URL / REALTIME_PUBLISHABLE_KEY missing).");
-          return;
-        }
-        const sb = initRealtime(cfg.url, cfg.key);
-        const [s, q] = await Promise.all([getSession({ data: { slug: slug! } }), getQueue({ data: { slug: slug! } })]);
+        const [s, q, c] = await Promise.all([
+          getSession({ data: { slug: slug! } }),
+          getQueue({ data: { slug: slug! } }),
+          getCurrentTrack({ data: { slug: slug! } }),
+        ]);
         if (cancelled) return;
         setSession(s as SessionPublic);
         setQueue(q as QueueItem[]);
+        setCurrent(c as CurrentTrack | null);
+
+        const refresh = async () => {
+          try {
+            const [freshSession, freshQueue, freshCurrent] = await Promise.all([
+              getSession({ data: { slug: slug! } }),
+              getQueue({ data: { slug: slug! } }),
+              getCurrentTrack({ data: { slug: slug! } }),
+            ]);
+            if (!cancelled) {
+              setSession(freshSession as SessionPublic);
+              setQueue(freshQueue as QueueItem[]);
+              setCurrent(freshCurrent as CurrentTrack | null);
+            }
+          } catch {
+            /* keep the last known live state */
+          }
+        };
+
+        const poll = window.setInterval(refresh, 4000);
+        if (!cfg.url || !cfg.key) {
+          setError(null);
+          return () => window.clearInterval(poll);
+        }
+        const sb = initRealtime(cfg.url, cfg.key);
 
         channel = sb.channel(`session:${s.id}`)
           .on("postgres_changes", { event: "*", schema: "public", table: "queue_items", filter: `session_id=eq.${s.id}` }, async () => {
@@ -98,15 +122,20 @@ export function useLiveSession(slug: string | null) {
             const h = payload.new as { id: string; kind: string; label: string; created_at: string };
             if (!cancelled) setHype((prev) => [{ id: h.id, kind: h.kind, label: h.label, at: h.created_at }, ...prev].slice(0, 12));
           })
-          .subscribe();
+          .subscribe((status) => {
+            if (status === "SUBSCRIBED") setError(null);
+          });
+        return () => window.clearInterval(poll);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load session");
       }
     }
 
-    bootstrap();
+    let cleanup: void | (() => void);
+    bootstrap().then((fn) => { cleanup = fn; });
     return () => {
       cancelled = true;
+      cleanup?.();
       if (channel) channel.unsubscribe();
     };
   }, [slug]);
