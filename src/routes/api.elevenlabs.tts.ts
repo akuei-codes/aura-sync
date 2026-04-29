@@ -1,8 +1,11 @@
 // ElevenLabs TTS endpoint — generates short DJ voice callouts.
 // Backend-only access to ELEVENLABS_API_KEY. Includes retry on 429/5xx with
 // Retry-After honoring, and never returns 5xx to the client (returns a JSON
-// fallback signal so the client can degrade gracefully).
+// fallback signal so the client can silently skip the line instead of using a
+// mismatched browser voice).
 import { createFileRoute } from "@tanstack/react-router";
+
+const ZYNK_DJ_VOICE_ID = "XSr0HH9U8dbZZaKq4Rmh";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +18,7 @@ async function callElevenLabs(text: string, voiceId: string, apiKey: string, att
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const upstream = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
       {
         method: "POST",
         headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
@@ -66,7 +69,7 @@ export const Route = createFileRoute("/api/elevenlabs/tts")({
 
         const text = (body.text ?? "").trim();
         // Voice is HARD-LOCKED server-side. Client cannot override.
-        const voiceId = "XSr0HH9U8dbZZaKq4Rmh";
+        const voiceId = ZYNK_DJ_VOICE_ID;
         if (!text || text.length > 240) {
           return new Response(JSON.stringify({ error: "BAD_TEXT", fallback: true }), {
             status: 200, headers: { "Content-Type": "application/json", ...CORS },
