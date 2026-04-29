@@ -39,7 +39,7 @@ function getClientId(): string {
 
 function Audience() {
   const { slug } = Route.useSearch();
-  const { session, queue, current, reactions: liveReactions, error } = useLiveSession(slug ?? null);
+  const { session, queue, current, reactions: liveReactions, error, refresh } = useLiveSession(slug ?? null);
   const [tab, setTab] = useState<"feel" | "vote" | "request">("feel");
   const [floaters, setFloaters] = useState<Floater[]>([]);
   const [voted, setVoted] = useState<Set<string>>(new Set());
@@ -105,7 +105,9 @@ function Audience() {
   async function vote(queueItemId: string) {
     if (!slug || voted.has(queueItemId)) return;
     setVoted((s) => new Set(s).add(queueItemId));
-    voteForTrack({ data: { slug, queueItemId, clientId } }).catch(() => {});
+    voteForTrack({ data: { slug, queueItemId, clientId } })
+      .then(() => refresh())
+      .catch(() => {});
   }
 
   // Debounced search
@@ -131,6 +133,7 @@ function Audience() {
     setQueueMsg(null);
     try {
       const res = await requestTrack({ data: { slug, spotifyTrackId } });
+      await refresh();
       setSearch("");
       setSearchResults([]);
       setTab("vote");
