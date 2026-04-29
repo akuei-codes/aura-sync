@@ -32,7 +32,7 @@ export const createSession = createServerFn({ method: "POST" })
     const djToken = randomToken(32);
     const rows = await sql<Array<{ id: string; slug: string }>>`
       insert into public.sessions (slug, title, vibe, dj_token_hash, planned_duration_minutes, status)
-      values (${slug}, ${data.title}, ${data.vibe}, ${sha256Hex(djToken)}, ${data.plannedDurationMinutes ?? null}, 'draft')
+      values (${slug}, ${data.title}, ${data.vibe}, ${sha256Hex(djToken)}, ${data.plannedDurationMinutes ?? null}, 'live')
       returning id, slug
     `;
     return { sessionId: rows[0].id, slug: rows[0].slug, djToken };
