@@ -13,6 +13,7 @@ import {
   igniteRoom as igniteRoomFn,
   setPlaybackPaused,
   syncPlaybackPosition,
+  resumeCurrentOnDevice,
   updateEnergy,
   getSpotifyAccessToken,
   getPendingRequests,
@@ -148,6 +149,16 @@ function DJ() {
         player.addListener("initialization_error", (d) => setPlayerError(String((d as { message: string }).message)));
         player.addListener("authentication_error", (d) => setPlayerError(String((d as { message: string }).message)));
         player.addListener("account_error", () => setPlayerError("Spotify Premium required."));
+        // Detect track-end so autopilot chains the next song precisely.
+        player.addListener("player_state_changed", (state) => {
+          const st = state as { position: number; duration: number; paused: boolean; track_window?: { previous_tracks?: unknown[] } } | null;
+          if (!st) return;
+          // Spotify signals end-of-track as paused at position 0 with the track moved into previous_tracks.
+          const ended = st.paused && st.position === 0 && (st.track_window?.previous_tracks?.length ?? 0) > 0;
+          if (ended && session && token) {
+            advanceToNextTrack({ data: { sessionId: session.id, djToken: token } }).catch(() => {});
+          }
+        });
         await player.connect();
       } catch (e) {
         setPlayerError(e instanceof Error ? e.message : "Player init failed");
@@ -204,6 +215,22 @@ function DJ() {
     const t = setInterval(load, 4000);
     return () => { cancelled = true; clearInterval(t); };
   }, [session?.id, token, autoApprove]);
+
+  // When the Spotify device becomes ready after the room is already ignited
+  // (host ignited before SDK loaded, or page was refreshed), kick playback of
+  // the current track on the device so audio actually starts. Only do this for
+  // "stale" current_track rows — fresh advances already start playback server-side.
+  const resumedTrackRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session?.ignited || !deviceReady || !current || !token) return;
+    if (resumedTrackRef.current === current.spotify_track_id) return;
+    const ageMs = Date.now() - new Date(current.position_set_at).getTime();
+    if (ageMs < 3000) { resumedTrackRef.current = current.spotify_track_id; return; }
+    resumedTrackRef.current = current.spotify_track_id;
+    resumeCurrentOnDevice({ data: { sessionId: session.id, djToken: token } }).catch(() => {
+      resumedTrackRef.current = null;
+    });
+  }, [session?.ignited, deviceReady, current?.spotify_track_id, current?.position_set_at, token]);
 
   async function ignite() {
     if (!session || !token || igniting) return;
@@ -303,10 +330,10 @@ function DJ() {
           </div>
           <button
             onClick={ignite}
-            disabled={igniting || !deviceReady || queue.length === 0}
+            disabled={igniting || queue.length === 0}
             className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.4em] hover:bg-muted-foreground transition-colors disabled:opacity-40"
           >
-            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : "⚡ ignite the room"}
+            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : !deviceReady ? "⚡ ignite (no audio yet)" : "⚡ ignite the room"}
           </button>
         </div>
       )}

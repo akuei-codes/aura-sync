@@ -32,7 +32,7 @@ export const createSession = createServerFn({ method: "POST" })
     const djToken = randomToken(32);
     const rows = await sql<Array<{ id: string; slug: string }>>`
       insert into public.sessions (slug, title, vibe, dj_token_hash, planned_duration_minutes, status)
-      values (${slug}, ${data.title}, ${data.vibe}, ${sha256Hex(djToken)}, ${data.plannedDurationMinutes ?? null}, 'draft')
+      values (${slug}, ${data.title}, ${data.vibe}, ${sha256Hex(djToken)}, ${data.plannedDurationMinutes ?? null}, 'live')
       returning id, slug
     `;
     return { sessionId: rows[0].id, slug: rows[0].slug, djToken };
@@ -99,13 +99,16 @@ export const searchCatalog = createServerFn({ method: "POST" })
   });
 
 // ---- Public search for audience requests (uses DJ's token, but rate-limited)
+// Allowed any time the session exists (draft, live, or paused) so guests can
+// stack the queue before the host ignites the room.
 export const searchPublic = createServerFn({ method: "POST" })
   .inputValidator(z.object({ slug: z.string().min(1), query: z.string().min(1).max(200) }).parse)
   .handler(async ({ data }) => {
-    const rows = await sql<Array<{ id: string }>>`
-      select id from public.sessions where slug = ${data.slug} and status = 'live' limit 1
+    const rows = await sql<Array<{ id: string; status: string }>>`
+      select id, status from public.sessions where slug = ${data.slug} limit 1
     `;
-    if (rows.length === 0) throw new Error("Session not live");
+    if (rows.length === 0) throw new Error("Session not found");
+    if (rows[0].status === "ended") throw new Error("Session has ended");
     const token = await getSessionAccessToken(rows[0].id);
     return searchTracks(token, data.query, 8);
   });
@@ -508,4 +511,30 @@ export const setPlaybackPaused = createServerFn({ method: "POST" })
       where session_id = ${data.sessionId}
     `;
     return { ok: true };
+  });
+
+// ---- Resume current track on the DJ's device (used after SDK becomes ready) ----
+export const resumeCurrentOnDevice = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    const session = await sql<Array<{ spotify_device_id: string | null }>>`
+      select spotify_device_id from public.sessions where id = ${data.sessionId}
+    `;
+    const ct = await sql<Array<{ uri: string | null; position_ms_at: number; position_set_at: Date; is_paused: boolean }>>`
+      select uri, position_ms_at, position_set_at, is_paused
+      from public.current_track where session_id = ${data.sessionId}
+    `;
+    if (!session[0]?.spotify_device_id || !ct[0]?.uri) return { ok: false };
+    const elapsed = ct[0].is_paused ? 0 : Date.now() - new Date(ct[0].position_set_at).getTime();
+    const pos = Math.max(0, ct[0].position_ms_at + elapsed);
+    try {
+      const token = await getSessionAccessToken(data.sessionId);
+      const { playTrack } = await import("@/lib/spotify.server");
+      await playTrack(token, session[0].spotify_device_id, ct[0].uri, pos);
+      return { ok: true };
+    } catch (e) {
+      console.error("resumeCurrentOnDevice failed:", e);
+      return { ok: false };
+    }
   });
