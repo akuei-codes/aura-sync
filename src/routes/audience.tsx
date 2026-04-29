@@ -296,36 +296,72 @@ function Audience() {
       )}
 
       {tab === "vote" && (
-        <section className="px-5 py-6">
-          <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">vote what plays next</div>
-          <ul className="mt-4 space-y-2">
-            {queue.map((t, i) => {
-              const isVoted = voted.has(t.id);
-              return (
-                <li key={t.id} className="border hairline p-3 bg-card flex items-center gap-3">
-                  <span className="font-mono text-[10px] text-muted-foreground w-6">#{(i + 1).toString().padStart(2, "0")}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-display font-bold truncate">{t.title}</div>
-                    <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">
-                      {t.artist}{t.bpm && ` · ${Math.round(t.bpm)} BPM`}
+        <section className="px-5 py-6 space-y-6">
+          {current && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground mb-2">[ now playing ]</div>
+              <div className="border hairline p-3 bg-card flex items-center gap-3">
+                {current.album_image_url && <img src={current.album_image_url} alt="" className="w-12 h-12 shrink-0 object-cover" />}
+                <div className="min-w-0 flex-1">
+                  <div className="font-display font-bold truncate">{current.title}</div>
+                  <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">{current.artist}</div>
+                </div>
+                <span className="text-[10px] font-mono text-foreground bg-foreground/10 px-2 py-1 uppercase tracking-[0.2em]">live</span>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">vote what plays next</div>
+            <ul className="mt-4 space-y-2">
+              {queue.map((t, i) => {
+                const isVoted = voted.has(t.id);
+                const count = t.vote_count + (voteBump[t.id] ?? 0);
+                return (
+                  <li key={t.id} className="border hairline p-3 bg-card flex items-center gap-3">
+                    <span className="font-mono text-[10px] text-muted-foreground w-6">#{(i + 1).toString().padStart(2, "0")}</span>
+                    {t.album_image_url && <img src={t.album_image_url} alt="" className="w-10 h-10 shrink-0 object-cover" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display font-bold truncate">{t.title}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">
+                        {t.artist}{t.bpm && ` · ${Math.round(t.bpm)} BPM`}{t.requested_by && ` · @${t.requested_by}`}
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={() => vote(t.id)}
-                    disabled={isVoted}
-                    className={`px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border ${isVoted ? "bg-foreground text-background border-foreground" : "border-foreground hover:bg-foreground hover:text-background"} transition-colors`}
-                  >
-                    {isVoted ? "✓" : "↑"} {t.vote_count}
-                  </button>
+                    <button
+                      onClick={() => vote(t.id)}
+                      disabled={isVoted}
+                      className={`px-3 py-2 text-[10px] font-mono uppercase tracking-[0.3em] border ${isVoted ? "bg-foreground text-background border-foreground" : "border-foreground hover:bg-foreground hover:text-background"} transition-colors`}
+                    >
+                      {isVoted ? "✓" : "↑"} {count}
+                    </button>
+                  </li>
+                );
+              })}
+              {queue.length === 0 && (
+                <li className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground py-6 text-center">
+                  empty queue. drop a request →
                 </li>
-              );
-            })}
-            {queue.length === 0 && (
-              <li className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground py-6 text-center">
-                empty queue. drop a request →
-              </li>
-            )}
-          </ul>
+              )}
+            </ul>
+          </div>
+
+          {history.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground mb-2">[ already played ]</div>
+              <ul className="space-y-2">
+                {history.slice(0, 8).map((h) => (
+                  <li key={h.id} className="border hairline p-3 bg-card flex items-center gap-3 opacity-70">
+                    {h.album_image_url && <img src={h.album_image_url} alt="" className="w-10 h-10 shrink-0 object-cover grayscale" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display font-semibold truncate">{h.title}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">{h.artist}</div>
+                    </div>
+                    <span className="text-[10px] font-mono text-muted-foreground">{h.vote_count}♥</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 
