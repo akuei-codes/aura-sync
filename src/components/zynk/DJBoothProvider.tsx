@@ -17,7 +17,6 @@ import {
 } from "@/lib/sessions.functions";
 import { playRiser, playDrop, playSweepDown, unlockSfx } from "@/lib/sfx";
 import { speakCallout, stopCallout } from "@/lib/dj-voice";
-import type { SpotifyPlayer } from "@/lib/spotify-sdk";
 import "@/lib/spotify-sdk";
 
 interface DJBoothContextValue {
