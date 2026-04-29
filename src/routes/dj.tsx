@@ -178,9 +178,9 @@ function DJ() {
     return () => clearInterval(t);
   }, [session?.id, token, deviceReady]);
 
-  // Autopilot: when track approaches end, automatically advance.
+  // Autopilot: when track approaches end, automatically advance — but only after the host ignites.
   useEffect(() => {
-    if (!autopilot || !session || !token || !current) return;
+    if (!autopilot || !session?.ignited || !session || !token || !current) return;
     const remaining = current.duration_ms - position;
     if (remaining < 4000 && remaining > 0 && !advancing) {
       setAdvancing(true);
@@ -188,7 +188,65 @@ function DJ() {
         .catch((e) => setPlayerError(String(e)))
         .finally(() => setTimeout(() => setAdvancing(false), 5000));
     }
-  }, [autopilot, position, current?.duration_ms, session?.id, token]);
+  }, [autopilot, position, current?.duration_ms, session?.id, session?.ignited, token]);
+
+  // Poll pending requests when manual approval mode is on.
+  useEffect(() => {
+    if (!session || !token || autoApprove) { setPending([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await getPendingRequests({ data: { sessionId: session.id, djToken: token } });
+        if (!cancelled) setPending(rows as typeof pending);
+      } catch { /* ignore */ }
+    };
+    load();
+    const t = setInterval(load, 4000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [session?.id, token, autoApprove]);
+
+  async function ignite() {
+    if (!session || !token || igniting) return;
+    setIgniting(true);
+    try {
+      await igniteRoomFn({ data: { sessionId: session.id, djToken: token } });
+      await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+    } catch (e) {
+      setPlayerError(e instanceof Error ? e.message : "ignite failed");
+    } finally {
+      setIgniting(false);
+    }
+  }
+
+  async function togglePlayPause() {
+    if (!playerRef.current || !session || !token) return;
+    try {
+      await playerRef.current.togglePlay();
+      const state = await playerRef.current.getCurrentState();
+      if (state) {
+        await setPlaybackPaused({ data: { sessionId: session.id, djToken: token, paused: state.paused, positionMs: state.position } });
+      }
+    } catch (e) {
+      setPlayerError(e instanceof Error ? e.message : "toggle failed");
+    }
+  }
+
+  async function approve(id: string) {
+    if (!session || !token) return;
+    setPending((p) => p.filter((x) => x.id !== id));
+    await approveRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).catch(() => {});
+  }
+  async function reject(id: string) {
+    if (!session || !token) return;
+    setPending((p) => p.filter((x) => x.id !== id));
+    await rejectRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).catch(() => {});
+  }
+  async function toggleAutoApprove() {
+    if (!session || !token) return;
+    const next = !autoApprove;
+    setLocalAutoApprove(next);
+    await setAutoApproveFn({ data: { sessionId: session.id, djToken: token, enabled: next } });
+  }
 
   if (noSession) {
     return (
