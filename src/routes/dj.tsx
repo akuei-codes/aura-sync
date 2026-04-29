@@ -291,6 +291,26 @@ function DJ() {
         </div>
       )}
 
+      {/* Ignite banner — shown until host kicks the night off */}
+      {session && !session.ignited && (
+        <div className="px-6 py-6 border-b hairline bg-gradient-to-r from-foreground/5 to-transparent flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">room is staged · share the link</div>
+            <div className="font-display text-2xl md:text-3xl font-bold mt-1">Ignite when the floor is ready.</div>
+            <div className="text-xs text-muted-foreground mt-1 font-mono">
+              Audience link: <span className="text-foreground">/audience?slug={session.slug}</span>
+            </div>
+          </div>
+          <button
+            onClick={ignite}
+            disabled={igniting || !deviceReady || queue.length === 0}
+            className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.4em] hover:bg-muted-foreground transition-colors disabled:opacity-40"
+          >
+            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : "⚡ ignite the room"}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-12 gap-px bg-hairline">
         <main className="col-span-12 lg:col-span-8 bg-background p-6 lg:p-10 space-y-8">
           <section>
