@@ -16,7 +16,7 @@ import {
   getSession,
 } from "@/lib/sessions.functions";
 import { playIntroSequence, playTransitionSequence, playImpact, unlockSfx } from "@/lib/sfx";
-import { speakCallout, stopCallout, prewarmDjVoice } from "@/lib/dj-voice";
+import { speakCallout, stopCallout, prewarmDjVoice, type MixMode } from "@/lib/dj-voice";
 import "@/lib/spotify-sdk";
 
 interface DJBoothContextValue {
@@ -250,9 +250,12 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [active, deviceReady, sessionId, hostToken, hostSlug]);
 
-  // ---- Voice ducking helpers (deep duck so DJ is front-of-mix) -------------
-  const duck = useCallback(async () => {
-    try { await playerRef.current?.setVolume(0.08); } catch { /* ignore */ }
+  // ---- Voice ducking helpers (mode-aware) ----------------------------------
+  // "over"  = light duck (0.55) — DJ talks over the music, music stays present
+  // "pause" = deep duck (0.10) — used sparingly for emphasis (ignite, big moments)
+  const duck = useCallback(async (mode: MixMode = "over") => {
+    const target = mode === "pause" ? 0.10 : 0.55;
+    try { await playerRef.current?.setVolume(target); } catch { /* ignore */ }
   }, []);
   const unduck = useCallback(async () => {
     try { await playerRef.current?.setVolume(0.85); } catch { /* ignore */ }
@@ -292,9 +295,13 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Hype callout
+      // Hype callout — ONE per track, spoken OVER the music (light duck).
+      // Reset per-track speech budget so an energy/fire line can fire later if warranted.
+      spokeOnThisTrackRef.current = true;
       const nextTitle = (result as { nextTrack?: { title?: string } })?.nextTrack?.title;
-      void speakCallout("transition", { trackTitle: nextTitle, onDuck: duck, onUnduck: unduck });
+      void speakCallout("transition", { trackTitle: nextTitle, onDuck: duck, onUnduck: unduck, mode: "over", force: true });
+      // After ~12s, allow at most one more reactive line for the rest of the track.
+      setTimeout(() => { spokeOnThisTrackRef.current = false; }, 12000);
     } catch (e) {
       setPlayerError(e instanceof Error ? e.message : "advance failed");
     } finally {
@@ -302,10 +309,12 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     }
   }, [sessionId, hostToken, duck, unduck]);
 
+  // Per-track speech budget: prevents the DJ from talking more than once per track.
+  const spokeOnThisTrackRef = useRef<boolean>(false);
+
   // ---- Energy/vote watchers — event-driven callouts ------------------------
   const lastEnergyRef = useRef<number>(0);
   const lastReactionCountRef = useRef<number>(0);
-  const lastAmbientRef = useRef<number>(Date.now());
   const lastIgnitedRef = useRef<boolean>(false);
   useEffect(() => {
     if (!active || !hostSlug) return;
@@ -313,36 +322,38 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
       try {
         const session = await getSession({ data: { slug: hostSlug } });
         if (!session) return;
-        // Detect ignite transition -> play full intro sequence + ignite callout
+        // Ignite: full intro sequence + ignite callout (deep duck for emphasis)
         if (session.ignited && !lastIgnitedRef.current) {
           lastIgnitedRef.current = true;
           unlockSfx();
           playIntroSequence();
           setTimeout(() => {
-            void speakCallout("ignite", { onDuck: duck, onUnduck: unduck, force: true });
+            void speakCallout("ignite", { onDuck: duck, onUnduck: unduck, force: true, mode: "pause" });
           }, 4500);
         } else if (!session.ignited) {
           lastIgnitedRef.current = false;
         }
-        const e = session.crowd_energy ?? 0;
-        // More sensitive: energy spikes trigger hype sooner
-        if (e - lastEnergyRef.current > 0.1 && e > 0.55) {
-          void speakCallout("energy", { onDuck: duck, onUnduck: unduck });
-        }
-        lastEnergyRef.current = e;
-        const r = session.reaction_count_total ?? 0;
-        if (r - lastReactionCountRef.current > 4) {
-          void speakCallout("fire", { onDuck: duck, onUnduck: unduck });
-        }
-        lastReactionCountRef.current = r;
-        // Periodic ambient hype every ~45s when ignited
-        if (session.ignited && Date.now() - lastAmbientRef.current > 45000) {
-          lastAmbientRef.current = Date.now();
-          const kinds: Array<"energy" | "fire" | "transition"> = ["energy", "fire", "transition"];
-          void speakCallout(kinds[Math.floor(Math.random() * kinds.length)], { onDuck: duck, onUnduck: unduck });
+        // Reactive lines: at most ONE additional line per track, only on real spikes.
+        if (!spokeOnThisTrackRef.current) {
+          const e = session.crowd_energy ?? 0;
+          if (e - lastEnergyRef.current > 0.18 && e > 0.7) {
+            spokeOnThisTrackRef.current = true;
+            void speakCallout("energy", { onDuck: duck, onUnduck: unduck, mode: "over" });
+          }
+          const r = session.reaction_count_total ?? 0;
+          if (r - lastReactionCountRef.current > 8) {
+            spokeOnThisTrackRef.current = true;
+            void speakCallout("fire", { onDuck: duck, onUnduck: unduck, mode: "over" });
+          }
+          lastEnergyRef.current = e;
+          lastReactionCountRef.current = r;
+        } else {
+          // Still update baselines so we don't fire a stale spike later.
+          lastEnergyRef.current = session.crowd_energy ?? lastEnergyRef.current;
+          lastReactionCountRef.current = session.reaction_count_total ?? lastReactionCountRef.current;
         }
       } catch { /* ignore */ }
-    }, 3000);
+    }, 4000);
     return () => clearInterval(t);
   }, [active, hostSlug, duck, unduck]);
 
