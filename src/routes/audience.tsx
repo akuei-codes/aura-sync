@@ -44,6 +44,7 @@ function Audience() {
   const [tab, setTab] = useState<"feel" | "vote" | "request">("feel");
   const [floaters, setFloaters] = useState<Floater[]>([]);
   const [voted, setVoted] = useState<Set<string>>(new Set());
+  const [voteBump, setVoteBump] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{
     id: string; name: string; artists: Array<{ name: string }>; album: { images: Array<{ url: string }> };
@@ -51,6 +52,7 @@ function Audience() {
   const [searching, setSearching] = useState(false);
   const [queueMsg, setQueueMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [queueing, setQueueing] = useState<string | null>(null);
+  const [history, setHistory] = useState<Array<{ id: string; title: string; artist: string; album_image_url: string | null; vote_count: number; played_at: string }>>([]);
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   const clientId = useMemo(() => getClientId(), []);
@@ -106,10 +108,26 @@ function Audience() {
   async function vote(queueItemId: string) {
     if (!slug || voted.has(queueItemId)) return;
     setVoted((s) => new Set(s).add(queueItemId));
+    setVoteBump((m) => ({ ...m, [queueItemId]: (m[queueItemId] ?? 0) + 1 }));
     voteForTrack({ data: { slug, queueItemId, clientId } })
       .then(() => refresh())
       .catch(() => {});
   }
+
+  // Poll played history for the live "already played" panel
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await getQueueHistory({ data: { slug } });
+        if (!cancelled) setHistory(rows as typeof history);
+      } catch { /* ignore */ }
+    };
+    load();
+    const t = setInterval(load, 4000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [slug]);
 
   // Debounced search
   useEffect(() => {
