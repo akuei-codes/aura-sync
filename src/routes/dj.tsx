@@ -156,6 +156,7 @@ function DJ() {
           <NavPill to="/audience" search={{ slug }} label="Audience" />
           <NavPill to="/projection" search={{ slug }} label="Projection" />
           <NavPill to="/recap" search={{ slug }} label="Recap" />
+          <NavPill to="/sessions" label="My sessions" />
           <NavPill to="/" label="↩ Exit" />
         </div>
       </header>

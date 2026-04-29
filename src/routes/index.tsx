@@ -22,6 +22,7 @@ function Landing() {
         <nav className="hidden md:flex items-center gap-8 text-xs font-mono uppercase tracking-[0.3em] text-muted-foreground">
           <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
           <a href="#views" className="hover:text-foreground transition-colors">The views</a>
+          <Link to="/sessions" className="hover:text-foreground transition-colors">My sessions</Link>
           <Link to="/dj" className="hover:text-foreground transition-colors">DJ booth</Link>
           <Link to="/recap" className="hover:text-foreground transition-colors">Recap</Link>
         </nav>
