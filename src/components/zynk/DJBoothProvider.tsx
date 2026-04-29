@@ -46,7 +46,8 @@ const STORAGE_KEY = "zynk_dj_host";
 function readStoredHost(): { slug: string; token: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    // Prefer sessionStorage (current tab), fall back to localStorage (resume after close)
+    const raw = sessionStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed?.slug && parsed?.token) return parsed;
@@ -56,12 +57,18 @@ function readStoredHost(): { slug: string; token: string } | null {
 
 function writeStoredHost(slug: string, token: string) {
   if (typeof window === "undefined") return;
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token })); } catch { /* ignore */ }
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ slug, token }));
+  } catch { /* ignore */ }
 }
 
 function clearStoredHost() {
   if (typeof window === "undefined") return;
-  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
 }
 
 export function DJBoothProvider({ children }: { children: React.ReactNode }) {
