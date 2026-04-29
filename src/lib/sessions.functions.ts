@@ -14,7 +14,11 @@ import { pickNextTrack, nextEnergyTarget, generateHypeCopy } from "@/lib/ai-dj.s
 // ---- Realtime config (exposed safely to client) ----------------------------
 export const getRealtimeConfig = createServerFn({ method: "GET" }).handler(async () => {
   const rawUrl = process.env.REALTIME_URL ?? process.env.SUPABASE_URL;
-  const key = process.env.REALTIME_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
+  const key = process.env.REALTIME_PUBLISHABLE_KEY
+    ?? process.env.SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.SUPABASE_ANON_KEY
+    ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.VITE_SUPABASE_ANON_KEY;
   const url = rawUrl
     ? rawUrl
         .replace(/^wss:/i, "https:")
