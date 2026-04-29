@@ -313,10 +313,10 @@ function DJ() {
           </div>
           <button
             onClick={ignite}
-            disabled={igniting || !deviceReady || queue.length === 0}
+            disabled={igniting || queue.length === 0}
             className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.4em] hover:bg-muted-foreground transition-colors disabled:opacity-40"
           >
-            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : "⚡ ignite the room"}
+            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : !deviceReady ? "⚡ ignite (no audio yet)" : "⚡ ignite the room"}
           </button>
         </div>
       )}
