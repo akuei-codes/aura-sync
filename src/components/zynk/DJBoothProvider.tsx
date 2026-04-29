@@ -316,8 +316,6 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
   const lastEnergyRef = useRef<number>(0);
   const lastReactionCountRef = useRef<number>(0);
   const lastIgnitedRef = useRef<boolean>(false);
-  const lastReactionCountRef = useRef<number>(0);
-  const lastIgnitedRef = useRef<boolean>(false);
   useEffect(() => {
     if (!active || !hostSlug) return;
     const t = setInterval(async () => {
