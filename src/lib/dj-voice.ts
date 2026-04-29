@@ -1,8 +1,8 @@
-// AI DJ voice — ElevenLabs TTS with browser SpeechSynthesis fallback.
+// AI DJ voice — ElevenLabs TTS only.
 // All requests are routed through /api/elevenlabs/tts (the API key never
 // leaves the server). Phrases are pre-cached as audio blobs at startup so
-// transitions are instant. If ElevenLabs is unavailable, we fall back to the
-// browser's SpeechSynthesisUtterance for the rest of the session.
+// transitions are instant. Do not fall back to browser SpeechSynthesis — it
+// sounds like the wrong DJ voice.
 
 // HARD-LOCKED custom ZYNK DJ voice. Do not override at runtime.
 export const ZYNK_DJ_VOICE_ID = "XSr0HH9U8dbZZaKq4Rmh";
@@ -61,10 +61,9 @@ function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ---- Provider mode (premium ElevenLabs vs browser fallback) ---------------
-type Provider = "premium" | "browser";
-let provider: Provider = "premium";
-let consecutiveFailures = 0;
+// ---- Provider mode --------------------------------------------------------
+type Provider = "elevenlabs";
+const provider: Provider = "elevenlabs";
 
 // ---- Cache layer: pre-fetched audio blobs (per text) ---------------------
 const audioCache = new Map<string, Promise<Blob>>();
@@ -82,7 +81,6 @@ async function fetchTtsBlob(text: string): Promise<Blob> {
     let payload: { fallback?: boolean; error?: string } = {};
     try { payload = await res.json(); } catch { /* ignore */ }
     if (payload.fallback) {
-      provider = "browser";
       throw new Error(`TTS fallback: ${payload.error ?? "unknown"}`);
     }
     throw new Error("TTS returned JSON without fallback");
@@ -132,23 +130,6 @@ async function runQueue() {
 function enqueue(job: QueueJob) {
   queue.push(job);
   void runQueue();
-}
-
-// ---- Browser fallback ----------------------------------------------------
-function speakBrowser(text: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-US";
-      u.rate = 1.05;
-      u.pitch = 1.0;
-      u.volume = 1.0;
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
-      window.speechSynthesis.speak(u);
-    } catch { resolve(); }
-  });
 }
 
 // ---- Premium playback ----------------------------------------------------
@@ -214,18 +195,7 @@ export async function speakCallout(
   enqueue(async () => {
     opts.onDuck?.(mode);
     try {
-      if (provider === "premium") {
-        try {
-          await speakPremium(text);
-          consecutiveFailures = 0;
-        } catch {
-          consecutiveFailures += 1;
-          if (consecutiveFailures >= 2) provider = "browser";
-          await speakBrowser(text);
-        }
-      } else {
-        await speakBrowser(text);
-      }
+      await speakPremium(text);
     } finally {
       opts.onUnduck?.();
     }
