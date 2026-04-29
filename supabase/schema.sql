@@ -60,6 +60,11 @@ create table if not exists public.sessions (
   crowd_energy                double precision not null default 0.55
                               check (crowd_energy between 0 and 1),
   autopilot                   boolean not null default true,
+  -- When true, every audience request goes straight into the live queue.
+  -- When false, requests land in pending and the host approves each one.
+  auto_approve                boolean not null default true,
+  -- Set true once the host hits "Ignite" — AI starts mixing.
+  ignited                     boolean not null default false,
   projection_mode             public.projection_mode not null default 'auto',
 
   -- Counters (maintained by triggers — never recount on read)
@@ -137,6 +142,9 @@ create table if not exists public.queue_items (
   ai_score            real,         -- AI DJ ranking score (0..1)
   -- ai_picked indicates this was inserted by the autopilot, not a request
   ai_picked           boolean not null default false,
+  -- approval status: pending requests don't show in audience queue and AI won't pick them
+  approved            boolean not null default true,
+  rejected_at         timestamptz,
   played_at           timestamptz,  -- null = still in queue, set = already played
   created_at          timestamptz not null default now(),
   unique (session_id, spotify_track_id, played_at)  -- one pending request per track
@@ -321,3 +329,15 @@ select id, slug, title, vibe, status, crowd_energy, autopilot, projection_mode,
        reaction_count_total, vote_count_total, mix_drop_count, listener_estimate,
        started_at, ended_at, planned_duration_minutes, created_at, updated_at
 from public.sessions;
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION SHIMS — safe to re-run on existing databases
+-- ----------------------------------------------------------------------------
+alter table public.sessions    add column if not exists auto_approve boolean not null default true;
+alter table public.sessions    add column if not exists ignited      boolean not null default false;
+alter table public.queue_items add column if not exists approved     boolean not null default true;
+alter table public.queue_items add column if not exists rejected_at  timestamptz;
+
+create index if not exists queue_pending_approval_idx
+  on public.queue_items(session_id, created_at)
+  where played_at is null and approved = false and rejected_at is null;

@@ -134,7 +134,12 @@ function Audience() {
       setSearch("");
       setSearchResults([]);
       setTab("vote");
-      setQueueMsg({ kind: "ok", text: res.duplicate ? "Already in queue — bumped." : "Queued. The DJ feels it." });
+      const msg = res.duplicate
+        ? "Already in queue — bumped."
+        : res.approved
+          ? "Queued. The DJ feels it."
+          : "Sent to the host for approval.";
+      setQueueMsg({ kind: "ok", text: msg });
       setTimeout(() => setQueueMsg(null), 3500);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not queue track.";

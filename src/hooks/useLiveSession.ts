@@ -44,6 +44,8 @@ export interface SessionPublic {
   status: string;
   crowd_energy: number;
   autopilot: boolean;
+  auto_approve: boolean;
+  ignited: boolean;
   projection_mode: "auto" | "abstract" | "silhouette";
   reaction_count_total: number;
   vote_count_total: number;

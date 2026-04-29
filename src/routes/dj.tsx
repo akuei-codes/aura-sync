@@ -9,9 +9,15 @@ import {
   advanceToNextTrack,
   registerDeviceId,
   setAutopilot as setAutopilotFn,
+  setAutoApprove as setAutoApproveFn,
+  igniteRoom as igniteRoomFn,
+  setPlaybackPaused,
   syncPlaybackPosition,
   updateEnergy,
   getSpotifyAccessToken,
+  getPendingRequests,
+  approveRequest,
+  rejectRequest,
 } from "@/lib/sessions.functions";
 
 export const Route = createFileRoute("/dj")({
@@ -65,17 +71,21 @@ function DJ() {
   const noSession = !slug || !token;
   const { session, queue, current, hype, error } = useLiveSession(slug ?? null);
   const [autopilot, setLocalAutopilot] = useState(true);
+  const [autoApprove, setLocalAutoApprove] = useState(true);
   const [energyLocal, setEnergyLocal] = useState(0.55);
   const [position, setPosition] = useState(0);
   const [deviceReady, setDeviceReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
+  const [pending, setPending] = useState<Array<{ id: string; title: string; artist: string; album_image_url: string | null; requested_by: string | null }>>([]);
+  const [igniting, setIgniting] = useState(false);
   const playerRef = useRef<SpotifyPlayer | null>(null);
 
   // Sync local controls with server state
   useEffect(() => {
     if (session) {
       setLocalAutopilot(session.autopilot);
+      setLocalAutoApprove(session.auto_approve);
       setEnergyLocal(session.crowd_energy);
     }
   }, [session?.id]);
@@ -168,9 +178,9 @@ function DJ() {
     return () => clearInterval(t);
   }, [session?.id, token, deviceReady]);
 
-  // Autopilot: when track approaches end, automatically advance.
+  // Autopilot: when track approaches end, automatically advance — but only after the host ignites.
   useEffect(() => {
-    if (!autopilot || !session || !token || !current) return;
+    if (!autopilot || !session?.ignited || !session || !token || !current) return;
     const remaining = current.duration_ms - position;
     if (remaining < 4000 && remaining > 0 && !advancing) {
       setAdvancing(true);
@@ -178,7 +188,65 @@ function DJ() {
         .catch((e) => setPlayerError(String(e)))
         .finally(() => setTimeout(() => setAdvancing(false), 5000));
     }
-  }, [autopilot, position, current?.duration_ms, session?.id, token]);
+  }, [autopilot, position, current?.duration_ms, session?.id, session?.ignited, token]);
+
+  // Poll pending requests when manual approval mode is on.
+  useEffect(() => {
+    if (!session || !token || autoApprove) { setPending([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await getPendingRequests({ data: { sessionId: session.id, djToken: token } });
+        if (!cancelled) setPending(rows as typeof pending);
+      } catch { /* ignore */ }
+    };
+    load();
+    const t = setInterval(load, 4000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [session?.id, token, autoApprove]);
+
+  async function ignite() {
+    if (!session || !token || igniting) return;
+    setIgniting(true);
+    try {
+      await igniteRoomFn({ data: { sessionId: session.id, djToken: token } });
+      await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+    } catch (e) {
+      setPlayerError(e instanceof Error ? e.message : "ignite failed");
+    } finally {
+      setIgniting(false);
+    }
+  }
+
+  async function togglePlayPause() {
+    if (!playerRef.current || !session || !token) return;
+    try {
+      await playerRef.current.togglePlay();
+      const state = await playerRef.current.getCurrentState();
+      if (state) {
+        await setPlaybackPaused({ data: { sessionId: session.id, djToken: token, paused: state.paused, positionMs: state.position } });
+      }
+    } catch (e) {
+      setPlayerError(e instanceof Error ? e.message : "toggle failed");
+    }
+  }
+
+  async function approve(id: string) {
+    if (!session || !token) return;
+    setPending((p) => p.filter((x) => x.id !== id));
+    await approveRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).catch(() => {});
+  }
+  async function reject(id: string) {
+    if (!session || !token) return;
+    setPending((p) => p.filter((x) => x.id !== id));
+    await rejectRequest({ data: { sessionId: session.id, djToken: token, queueItemId: id } }).catch(() => {});
+  }
+  async function toggleAutoApprove() {
+    if (!session || !token) return;
+    const next = !autoApprove;
+    setLocalAutoApprove(next);
+    await setAutoApproveFn({ data: { sessionId: session.id, djToken: token, enabled: next } });
+  }
 
   if (noSession) {
     return (
@@ -220,6 +288,26 @@ function DJ() {
           {warn === "free" && "⚠ free spotify account — playback disabled. premium needed for booth."}
           {playerError && ` · player: ${playerError}`}
           {error && ` · live: ${error}`}
+        </div>
+      )}
+
+      {/* Ignite banner — shown until host kicks the night off */}
+      {session && !session.ignited && (
+        <div className="px-6 py-6 border-b hairline bg-gradient-to-r from-foreground/5 to-transparent flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">room is staged · share the link</div>
+            <div className="font-display text-2xl md:text-3xl font-bold mt-1">Ignite when the floor is ready.</div>
+            <div className="text-xs text-muted-foreground mt-1 font-mono">
+              Audience link: <span className="text-foreground">/audience?slug={session.slug}</span>
+            </div>
+          </div>
+          <button
+            onClick={ignite}
+            disabled={igniting || !deviceReady || queue.length === 0}
+            className="px-6 py-4 bg-foreground text-background font-mono uppercase text-xs tracking-[0.4em] hover:bg-muted-foreground transition-colors disabled:opacity-40"
+          >
+            {igniting ? "igniting..." : queue.length === 0 ? "queue a song first" : "⚡ ignite the room"}
+          </button>
         </div>
       )}
 
@@ -285,8 +373,8 @@ function DJ() {
             </div>
           </section>
 
-          <section className="grid md:grid-cols-3 gap-6">
-            <ControlCard label="AI Autopilot" value={autopilot ? "ENGAGED" : "MANUAL"} accent>
+          <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <ControlCard label="AI Autopilot" value={autopilot ? "ON" : "OFF"} accent>
               <button
                 onClick={async () => {
                   if (!session || !token) return;
@@ -296,18 +384,27 @@ function DJ() {
                 }}
                 className={`mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border ${autopilot ? "bg-foreground text-background" : "border-foreground"}`}
               >
-                {autopilot ? "release control" : "let AI take over"}
+                {autopilot ? "release" : "engage"}
               </button>
             </ControlCard>
 
-            <ControlCard label="Energy Floor" value={Math.round(energyLocal * 100)}>
-              <input
-                type="range" min={0} max={100} value={Math.round(energyLocal * 100)}
-                onChange={(e) => setEnergyLocal(Number(e.target.value) / 100)}
-                onMouseUp={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
-                onTouchEnd={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
-                className="mt-4 w-full accent-white"
-              />
+            <ControlCard label="Auto-Approve" value={autoApprove ? "ON" : "REVIEW"}>
+              <button
+                onClick={toggleAutoApprove}
+                className={`mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border ${autoApprove ? "bg-foreground text-background" : "border-foreground"}`}
+              >
+                {autoApprove ? "review each one" : "auto-approve all"}
+              </button>
+            </ControlCard>
+
+            <ControlCard label={current?.is_paused ? "Paused" : "Playing"} value={deviceReady ? "READY" : "..."}>
+              <button
+                onClick={togglePlayPause}
+                disabled={!deviceReady || !current}
+                className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
+              >
+                {current?.is_paused ? "▶ play" : "⏸ pause"}
+              </button>
             </ControlCard>
 
             <ControlCard label="Drop Now" value={`${queue.length} queued`}>
@@ -326,13 +423,58 @@ function DJ() {
                 }}
                 className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
               >
-                {advancing ? "mixing…" : "drop now ⚡"}
+                {advancing ? "mixing…" : "skip ⚡"}
               </button>
             </ControlCard>
+          </section>
+
+          {/* Energy meter (own row, full width) */}
+          <section className="border hairline p-5 bg-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">crowd energy floor</div>
+                <div className="font-display text-3xl font-bold mt-1 tabular-nums">{Math.round(energyLocal * 100)}<span className="text-muted-foreground text-base">/100</span></div>
+              </div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground max-w-xs text-right">
+                AI raises this from reactions + votes — slider just sets a floor
+              </div>
+            </div>
+            <input
+              type="range" min={0} max={100} value={Math.round(energyLocal * 100)}
+              onChange={(e) => setEnergyLocal(Number(e.target.value) / 100)}
+              onMouseUp={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
+              onTouchEnd={() => session && token && updateEnergy({ data: { sessionId: session.id, djToken: token, energy: energyLocal } })}
+              className="mt-4 w-full accent-white"
+            />
           </section>
         </main>
 
         <aside className="col-span-12 lg:col-span-4 bg-card p-6 lg:p-8 space-y-8 min-h-screen">
+          {!autoApprove && (
+            <section>
+              <div className="flex items-baseline justify-between mb-3">
+                <div className="text-xs font-mono uppercase tracking-[0.4em] text-muted-foreground">[ pending requests ]</div>
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">{pending.length}</div>
+              </div>
+              <ul className="space-y-2 max-h-[35vh] overflow-y-auto">
+                {pending.map((r) => (
+                  <li key={r.id} className="border hairline p-3 bg-background flex items-center gap-3">
+                    {r.album_image_url && <img src={r.album_image_url} alt="" className="w-10 h-10 shrink-0 object-cover" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display font-semibold truncate">{r.title}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">{r.artist}</div>
+                    </div>
+                    <button onClick={() => approve(r.id)} className="px-2 py-1 text-[10px] font-mono uppercase border border-foreground hover:bg-foreground hover:text-background">✓</button>
+                    <button onClick={() => reject(r.id)} className="px-2 py-1 text-[10px] font-mono uppercase border border-muted-foreground text-muted-foreground hover:border-foreground hover:text-foreground">✕</button>
+                  </li>
+                ))}
+                {pending.length === 0 && (
+                  <li className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground py-3">no pending requests</li>
+                )}
+              </ul>
+            </section>
+          )}
+
           <section>
             <div className="text-xs font-mono uppercase tracking-[0.4em] text-muted-foreground mb-3">[ up next — top of queue ]</div>
             {queue[0] ? (

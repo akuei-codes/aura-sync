@@ -53,14 +53,15 @@ export const getSession = createServerFn({ method: "GET" })
     const rows = await sql<
       Array<{
         id: string; slug: string; title: string; vibe: string; status: string;
-        crowd_energy: number; autopilot: boolean; projection_mode: string;
+        crowd_energy: number; autopilot: boolean; auto_approve: boolean; ignited: boolean;
+        projection_mode: string;
         reaction_count_total: number; vote_count_total: number;
         listener_estimate: number; started_at: Date | null;
         spotify_user_id: string | null;
       }>
     >`
-      select id, slug, title, vibe, status, crowd_energy, autopilot, projection_mode,
-             reaction_count_total, vote_count_total, listener_estimate, started_at,
+      select id, slug, title, vibe, status, crowd_energy, autopilot, auto_approve, ignited,
+             projection_mode, reaction_count_total, vote_count_total, listener_estimate, started_at,
              spotify_user_id
       from public.sessions where slug = ${data.slug} limit 1
     `;
@@ -119,19 +120,20 @@ export const requestTrack = createServerFn({ method: "POST" })
     }).parse,
   )
   .handler(async ({ data }) => {
-    const sessionRows = await sql<Array<{ id: string }>>`
-      select id from public.sessions where slug = ${data.slug} limit 1
+    const sessionRows = await sql<Array<{ id: string; auto_approve: boolean }>>`
+      select id, auto_approve from public.sessions where slug = ${data.slug} limit 1
     `;
     if (sessionRows.length === 0) throw new Error("Session not found");
     const sessionId = sessionRows[0].id;
+    const autoApprove = sessionRows[0].auto_approve;
 
     // Already in pending queue?
-    const dup = await sql<Array<{ id: string }>>`
-      select id from public.queue_items
+    const dup = await sql<Array<{ id: string; approved: boolean }>>`
+      select id, approved from public.queue_items
       where session_id = ${sessionId} and spotify_track_id = ${data.spotifyTrackId} and played_at is null
       limit 1
     `;
-    if (dup.length > 0) return { id: dup[0].id, duplicate: true };
+    if (dup.length > 0) return { id: dup[0].id, duplicate: true, approved: dup[0].approved };
 
     const token = await getSessionAccessToken(sessionId);
     const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${data.spotifyTrackId}`, {
@@ -142,8 +144,6 @@ export const requestTrack = createServerFn({ method: "POST" })
     }
     const track = (await trackRes.json()) as SpotifyTrack;
 
-    // Audio features API is deprecated for newly-created Spotify apps (Nov 2024).
-    // Treat failures as soft — we just lose the BPM/key/energy data for AI mixing on this track.
     let f: { tempo?: number | null; key?: number | null; mode?: number | null; energy?: number | null; danceability?: number | null } | undefined;
     try {
       const features = await getAudioFeatures(token, [data.spotifyTrackId]);
@@ -156,7 +156,7 @@ export const requestTrack = createServerFn({ method: "POST" })
     const inserted = await sql<Array<{ id: string }>>`
       insert into public.queue_items (
         session_id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
-        duration_ms, bpm, key_pitch_class, mode, energy, danceability, requested_by
+        duration_ms, bpm, key_pitch_class, mode, energy, danceability, requested_by, approved
       ) values (
         ${sessionId}, ${track.id}, ${track.uri ?? null}, ${track.name ?? "Unknown"},
         ${track.artists?.map((a) => a.name).join(", ") ?? "Unknown"},
@@ -168,10 +168,11 @@ export const requestTrack = createServerFn({ method: "POST" })
         ${f?.mode ?? null},
         ${f?.energy ?? null},
         ${f?.danceability ?? null},
-        ${data.requestedBy ?? null}
+        ${data.requestedBy ?? null},
+        ${autoApprove}
       ) returning id
     `;
-    return { id: inserted[0].id, duplicate: false };
+    return { id: inserted[0].id, duplicate: false, approved: autoApprove };
   });
 
 // ---- Get queue -------------------------------------------------------------
@@ -202,10 +203,66 @@ export const getQueue = createServerFn({ method: "GET" })
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url,
              duration_ms, bpm, key_pitch_class, mode, energy, vote_count, requested_by, ai_picked
       from public.queue_items
-      where session_id = ${sessionRows[0].id} and played_at is null
+      where session_id = ${sessionRows[0].id} and played_at is null and approved = true and rejected_at is null
       order by vote_count desc, created_at asc
       limit 50
     `;
+  });
+
+// ---- Pending requests (DJ moderation) --------------------------------------
+export const getPendingRequests = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    return sql<Array<{
+      id: string; spotify_track_id: string; title: string; artist: string;
+      album_image_url: string | null; requested_by: string | null; created_at: Date;
+    }>>`
+      select id, spotify_track_id, title, artist, album_image_url, requested_by, created_at
+      from public.queue_items
+      where session_id = ${data.sessionId}
+        and played_at is null and approved = false and rejected_at is null
+      order by created_at asc
+      limit 50
+    `;
+  });
+
+export const approveRequest = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), queueItemId: z.string().uuid() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.queue_items set approved = true where id = ${data.queueItemId} and session_id = ${data.sessionId}`;
+    return { ok: true };
+  });
+
+export const rejectRequest = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), queueItemId: z.string().uuid() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.queue_items set rejected_at = now() where id = ${data.queueItemId} and session_id = ${data.sessionId}`;
+    return { ok: true };
+  });
+
+export const setAutoApprove = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), enabled: z.boolean() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.sessions set auto_approve = ${data.enabled} where id = ${data.sessionId}`;
+    // when toggling ON, auto-approve everything pending
+    if (data.enabled) {
+      await sql`update public.queue_items set approved = true
+        where session_id = ${data.sessionId} and played_at is null and rejected_at is null and approved = false`;
+    }
+    return { ok: true };
+  });
+
+export const igniteRoom = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string() }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`update public.sessions set ignited = true, autopilot = true,
+      started_at = coalesce(started_at, now()), status = 'live' where id = ${data.sessionId}`;
+    return { ok: true };
   });
 
 // ---- Vote ------------------------------------------------------------------
@@ -342,14 +399,24 @@ export const advanceToNextTrack = createServerFn({ method: "POST" })
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url, duration_ms,
              bpm, key_pitch_class, mode, energy, vote_count
       from public.queue_items
-      where session_id = ${data.sessionId} and played_at is null
+      where session_id = ${data.sessionId} and played_at is null and approved = true and rejected_at is null
       order by vote_count desc, created_at asc
       limit 30
     `;
     if (candidates.length === 0) return { ok: false, reason: "queue_empty" };
 
+    // Real reaction velocity over the last 2 minutes — this drives crowd_energy and AI target curve.
+    const reactionStats = await sql<Array<{ recent: number }>>`
+      select count(*)::int as recent from public.reactions
+      where session_id = ${data.sessionId} and created_at > now() - interval '2 minutes'
+    `;
+    const reactionsPerMin = (reactionStats[0]?.recent ?? 0) / 2;
     const sessionMinutes = s.started_at ? (Date.now() - s.started_at.getTime()) / 60000 : 0;
-    const energyTarget = nextEnergyTarget(sessionMinutes, s.reaction_count_total / Math.max(1, sessionMinutes));
+    const energyTarget = nextEnergyTarget(sessionMinutes, reactionsPerMin);
+
+    // Push the new energy reading back to the session so the UI/projection follows the crowd.
+    await sql`update public.sessions set crowd_energy = ${energyTarget} where id = ${data.sessionId}`;
+    await sql`insert into public.energy_snapshots (session_id, energy) values (${data.sessionId}, ${energyTarget})`;
 
     const currentDeck = current[0] ?? { title: "—", artist: "—", bpm: null, key_pitch_class: null, mode: null, energy: null };
     const pick = pickNextTrack(currentDeck, candidates, energyTarget);
@@ -421,6 +488,22 @@ export const syncPlaybackPosition = createServerFn({ method: "POST" })
         position_ms_at = ${data.positionMs},
         position_set_at = now(),
         is_paused = ${data.isPaused},
+        updated_at = now()
+      where session_id = ${data.sessionId}
+    `;
+    return { ok: true };
+  });
+
+// ---- Pause/resume from server (updates audience-visible current_track state) ----
+export const setPlaybackPaused = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), paused: z.boolean(), positionMs: z.number().int().min(0) }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`
+      update public.current_track set
+        is_paused = ${data.paused},
+        position_ms_at = ${data.positionMs},
+        position_set_at = now(),
         updated_at = now()
       where session_id = ${data.sessionId}
     `;
