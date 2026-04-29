@@ -295,6 +295,7 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
   // ---- Energy/vote watchers — event-driven callouts ------------------------
   const lastEnergyRef = useRef<number>(0);
   const lastReactionCountRef = useRef<number>(0);
+  const lastAmbientRef = useRef<number>(Date.now());
   useEffect(() => {
     if (!active || !hostSlug) return;
     const t = setInterval(async () => {
@@ -302,17 +303,24 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
         const session = await getSession({ data: { slug: hostSlug } });
         if (!session) return;
         const e = session.crowd_energy ?? 0;
-        if (e - lastEnergyRef.current > 0.18 && e > 0.7) {
+        // More sensitive: energy spikes trigger hype sooner
+        if (e - lastEnergyRef.current > 0.1 && e > 0.55) {
           void speakCallout("energy", { onDuck: duck, onUnduck: unduck });
         }
         lastEnergyRef.current = e;
         const r = session.reaction_count_total ?? 0;
-        if (r - lastReactionCountRef.current > 8) {
+        if (r - lastReactionCountRef.current > 4) {
           void speakCallout("fire", { onDuck: duck, onUnduck: unduck });
         }
         lastReactionCountRef.current = r;
+        // Periodic ambient hype every ~45s when ignited
+        if (session.ignited && Date.now() - lastAmbientRef.current > 45000) {
+          lastAmbientRef.current = Date.now();
+          const kinds: Array<"energy" | "fire" | "transition"> = ["energy", "fire", "transition"];
+          void speakCallout(kinds[Math.floor(Math.random() * kinds.length)], { onDuck: duck, onUnduck: unduck });
+        }
       } catch { /* ignore */ }
-    }, 6000);
+    }, 3000);
     return () => clearInterval(t);
   }, [active, hostSlug, duck, unduck]);
 
