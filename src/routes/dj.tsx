@@ -71,17 +71,21 @@ function DJ() {
   const noSession = !slug || !token;
   const { session, queue, current, hype, error } = useLiveSession(slug ?? null);
   const [autopilot, setLocalAutopilot] = useState(true);
+  const [autoApprove, setLocalAutoApprove] = useState(true);
   const [energyLocal, setEnergyLocal] = useState(0.55);
   const [position, setPosition] = useState(0);
   const [deviceReady, setDeviceReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
+  const [pending, setPending] = useState<Array<{ id: string; title: string; artist: string; album_image_url: string | null; requested_by: string | null }>>([]);
+  const [igniting, setIgniting] = useState(false);
   const playerRef = useRef<SpotifyPlayer | null>(null);
 
   // Sync local controls with server state
   useEffect(() => {
     if (session) {
       setLocalAutopilot(session.autopilot);
+      setLocalAutoApprove(session.auto_approve);
       setEnergyLocal(session.crowd_energy);
     }
   }, [session?.id]);
