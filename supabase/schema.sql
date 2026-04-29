@@ -329,3 +329,15 @@ select id, slug, title, vibe, status, crowd_energy, autopilot, projection_mode,
        reaction_count_total, vote_count_total, mix_drop_count, listener_estimate,
        started_at, ended_at, planned_duration_minutes, created_at, updated_at
 from public.sessions;
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION SHIMS — safe to re-run on existing databases
+-- ----------------------------------------------------------------------------
+alter table public.sessions    add column if not exists auto_approve boolean not null default true;
+alter table public.sessions    add column if not exists ignited      boolean not null default false;
+alter table public.queue_items add column if not exists approved     boolean not null default true;
+alter table public.queue_items add column if not exists rejected_at  timestamptz;
+
+create index if not exists queue_pending_approval_idx
+  on public.queue_items(session_id, created_at)
+  where played_at is null and approved = false and rejected_at is null;
