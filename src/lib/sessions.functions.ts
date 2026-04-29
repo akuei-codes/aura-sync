@@ -99,13 +99,16 @@ export const searchCatalog = createServerFn({ method: "POST" })
   });
 
 // ---- Public search for audience requests (uses DJ's token, but rate-limited)
+// Allowed any time the session exists (draft, live, or paused) so guests can
+// stack the queue before the host ignites the room.
 export const searchPublic = createServerFn({ method: "POST" })
   .inputValidator(z.object({ slug: z.string().min(1), query: z.string().min(1).max(200) }).parse)
   .handler(async ({ data }) => {
-    const rows = await sql<Array<{ id: string }>>`
-      select id from public.sessions where slug = ${data.slug} and status = 'live' limit 1
+    const rows = await sql<Array<{ id: string; status: string }>>`
+      select id, status from public.sessions where slug = ${data.slug} limit 1
     `;
-    if (rows.length === 0) throw new Error("Session not live");
+    if (rows.length === 0) throw new Error("Session not found");
+    if (rows[0].status === "ended") throw new Error("Session has ended");
     const token = await getSessionAccessToken(rows[0].id);
     return searchTracks(token, data.query, 8);
   });
