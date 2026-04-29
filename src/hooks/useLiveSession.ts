@@ -1,5 +1,5 @@
 // React hook: live session data via Supabase Realtime + initial fetch via server fn.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { initRealtime } from "@/lib/realtime";
 import { getCurrentTrack, getRealtimeConfig, getQueue, getSession } from "@/lib/sessions.functions";
 
@@ -61,6 +61,19 @@ export function useLiveSession(slug: string | null) {
   const [hype, setHype] = useState<Array<{ id: string; kind: string; label: string; at: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const refresh = useCallback(async () => {
+    if (!slug) return;
+    const [freshSession, freshQueue, freshCurrent] = await Promise.all([
+      getSession({ data: { slug } }),
+      getQueue({ data: { slug } }),
+      getCurrentTrack({ data: { slug } }),
+    ]);
+    setSession(freshSession as SessionPublic);
+    setQueue(freshQueue as QueueItem[]);
+    setCurrent(freshCurrent as CurrentTrack | null);
+    setError(null);
+  }, [slug]);
+
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
@@ -79,24 +92,15 @@ export function useLiveSession(slug: string | null) {
         setQueue(q as QueueItem[]);
         setCurrent(c as CurrentTrack | null);
 
-        const refresh = async () => {
+        const refreshSafely = async () => {
           try {
-            const [freshSession, freshQueue, freshCurrent] = await Promise.all([
-              getSession({ data: { slug: slug! } }),
-              getQueue({ data: { slug: slug! } }),
-              getCurrentTrack({ data: { slug: slug! } }),
-            ]);
-            if (!cancelled) {
-              setSession(freshSession as SessionPublic);
-              setQueue(freshQueue as QueueItem[]);
-              setCurrent(freshCurrent as CurrentTrack | null);
-            }
+            if (!cancelled) await refresh();
           } catch {
             /* keep the last known live state */
           }
         };
 
-        const poll = window.setInterval(refresh, 4000);
+        const poll = window.setInterval(refreshSafely, 4000);
         if (!cfg.url || !cfg.key) {
           setError(null);
           return () => window.clearInterval(poll);
@@ -138,7 +142,7 @@ export function useLiveSession(slug: string | null) {
       cleanup?.();
       if (channel) channel.unsubscribe();
     };
-  }, [slug]);
+  }, [slug, refresh]);
 
-  return { session, queue, current, reactions, hype, error };
+  return { session, queue, current, reactions, hype, error, refresh };
 }
