@@ -136,7 +136,10 @@ export function useLiveSession(slug: string | null) {
     }
 
     let cleanup: void | (() => void);
-    bootstrap().then((fn) => { cleanup = fn; });
+    bootstrap().then((fn) => {
+      cleanup = fn;
+      if (cancelled) cleanup?.();
+    });
     return () => {
       cancelled = true;
       cleanup?.();
