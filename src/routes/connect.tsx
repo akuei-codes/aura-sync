@@ -35,6 +35,17 @@ function Connect() {
         data: { title: room.trim() || "untitled room", vibe },
       });
       setCreated(res);
+      // Persist this session so the host can resume it later from /sessions.
+      try {
+        const KEY = "zynk_host_sessions";
+        const raw = localStorage.getItem(KEY);
+        const list: Array<{ sessionId: string; djToken: string; slug: string; title: string; createdAt: string }> = raw ? JSON.parse(raw) : [];
+        list.unshift({
+          sessionId: res.sessionId, djToken: res.djToken, slug: res.slug,
+          title: room.trim() || "untitled room", createdAt: new Date().toISOString(),
+        });
+        localStorage.setItem(KEY, JSON.stringify(list.slice(0, 50)));
+      } catch { /* ignore */ }
       setStep("spotify");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not create session.");
