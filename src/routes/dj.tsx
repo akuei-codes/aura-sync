@@ -276,7 +276,7 @@ function DJ() {
 
             <ControlCard label={current?.is_paused ? "Paused" : "Playing"} value={deviceReady ? "READY" : "..."}>
               <button
-                onClick={togglePlayPause}
+                onClick={booth.togglePlayPause}
                 disabled={!deviceReady || !current}
                 className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
               >
@@ -291,10 +291,10 @@ function DJ() {
                   if (!session || !token) return;
                   setAdvancing(true);
                   try {
-                    await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+                    await booth.triggerAdvance();
                     await refresh();
                   } catch (e) {
-                    setPlayerError(e instanceof Error ? e.message : "advance failed");
+                    console.error(e);
                   } finally {
                     setAdvancing(false);
                   }
