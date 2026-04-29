@@ -9,9 +9,15 @@ import {
   advanceToNextTrack,
   registerDeviceId,
   setAutopilot as setAutopilotFn,
+  setAutoApprove as setAutoApproveFn,
+  igniteRoom as igniteRoomFn,
+  setPlaybackPaused,
   syncPlaybackPosition,
   updateEnergy,
   getSpotifyAccessToken,
+  getPendingRequests,
+  approveRequest,
+  rejectRequest,
 } from "@/lib/sessions.functions";
 
 export const Route = createFileRoute("/dj")({
