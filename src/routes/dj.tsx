@@ -148,6 +148,16 @@ function DJ() {
         player.addListener("initialization_error", (d) => setPlayerError(String((d as { message: string }).message)));
         player.addListener("authentication_error", (d) => setPlayerError(String((d as { message: string }).message)));
         player.addListener("account_error", () => setPlayerError("Spotify Premium required."));
+        // Detect track-end so autopilot chains the next song precisely.
+        player.addListener("player_state_changed", (state) => {
+          const st = state as { position: number; duration: number; paused: boolean; track_window?: { previous_tracks?: unknown[] } } | null;
+          if (!st) return;
+          // Spotify signals end-of-track as paused at position 0 with the track moved into previous_tracks.
+          const ended = st.paused && st.position === 0 && (st.track_window?.previous_tracks?.length ?? 0) > 0;
+          if (ended && session && token) {
+            advanceToNextTrack({ data: { sessionId: session.id, djToken: token } }).catch(() => {});
+          }
+        });
         await player.connect();
       } catch (e) {
         setPlayerError(e instanceof Error ? e.message : "Player init failed");
