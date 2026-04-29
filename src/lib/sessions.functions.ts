@@ -493,3 +493,19 @@ export const syncPlaybackPosition = createServerFn({ method: "POST" })
     `;
     return { ok: true };
   });
+
+// ---- Pause/resume from server (updates audience-visible current_track state) ----
+export const setPlaybackPaused = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ sessionId: z.string().uuid(), djToken: z.string(), paused: z.boolean(), positionMs: z.number().int().min(0) }).parse)
+  .handler(async ({ data }) => {
+    await requireDj(data.sessionId, data.djToken);
+    await sql`
+      update public.current_track set
+        is_paused = ${data.paused},
+        position_ms_at = ${data.positionMs},
+        position_set_at = now(),
+        updated_at = now()
+      where session_id = ${data.sessionId}
+    `;
+    return { ok: true };
+  });
