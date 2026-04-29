@@ -314,7 +314,9 @@ export const getCurrentTrack = createServerFn({ method: "GET" })
       is_paused: boolean;
     }>>`
       select ct.spotify_track_id, ct.uri, ct.title, ct.artist, ct.album_image_url, ct.preview_url,
-             ct.duration_ms, ct.bpm, ct.energy, ct.position_ms_at, ct.position_set_at::text as position_set_at, ct.is_paused
+             ct.duration_ms, ct.bpm, ct.energy, ct.position_ms_at,
+             to_char(ct.position_set_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as position_set_at,
+             ct.is_paused
       from public.current_track ct
       join public.sessions s on s.id = ct.session_id
       where s.slug = ${data.slug}
