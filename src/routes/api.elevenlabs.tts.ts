@@ -57,7 +57,7 @@ export const Route = createFileRoute("/api/elevenlabs/tts")({
           });
         }
 
-        let body: { text?: string; voiceId?: string };
+        let body: { text?: string };
         try { body = await request.json(); } catch {
           return new Response(JSON.stringify({ error: "BAD_JSON", fallback: true }), {
             status: 200, headers: { "Content-Type": "application/json", ...CORS },
@@ -65,14 +65,10 @@ export const Route = createFileRoute("/api/elevenlabs/tts")({
         }
 
         const text = (body.text ?? "").trim();
-        const voiceId = (body.voiceId ?? "XSr0HH9U8dbZZaKq4Rmh").trim();
-        if (!text || text.length > 200) {
+        // Voice is HARD-LOCKED server-side. Client cannot override.
+        const voiceId = "XSr0HH9U8dbZZaKq4Rmh";
+        if (!text || text.length > 240) {
           return new Response(JSON.stringify({ error: "BAD_TEXT", fallback: true }), {
-            status: 200, headers: { "Content-Type": "application/json", ...CORS },
-          });
-        }
-        if (!/^[a-zA-Z0-9_]+$/.test(voiceId)) {
-          return new Response(JSON.stringify({ error: "BAD_VOICE", fallback: true }), {
             status: 200, headers: { "Content-Type": "application/json", ...CORS },
           });
         }
