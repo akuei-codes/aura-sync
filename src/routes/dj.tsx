@@ -450,6 +450,31 @@ function DJ() {
         </main>
 
         <aside className="col-span-12 lg:col-span-4 bg-card p-6 lg:p-8 space-y-8 min-h-screen">
+          {!autoApprove && (
+            <section>
+              <div className="flex items-baseline justify-between mb-3">
+                <div className="text-xs font-mono uppercase tracking-[0.4em] text-muted-foreground">[ pending requests ]</div>
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">{pending.length}</div>
+              </div>
+              <ul className="space-y-2 max-h-[35vh] overflow-y-auto">
+                {pending.map((r) => (
+                  <li key={r.id} className="border hairline p-3 bg-background flex items-center gap-3">
+                    {r.album_image_url && <img src={r.album_image_url} alt="" className="w-10 h-10 shrink-0 object-cover" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display font-semibold truncate">{r.title}</div>
+                      <div className="text-[10px] font-mono uppercase text-muted-foreground truncate">{r.artist}</div>
+                    </div>
+                    <button onClick={() => approve(r.id)} className="px-2 py-1 text-[10px] font-mono uppercase border border-foreground hover:bg-foreground hover:text-background">✓</button>
+                    <button onClick={() => reject(r.id)} className="px-2 py-1 text-[10px] font-mono uppercase border border-muted-foreground text-muted-foreground hover:border-foreground hover:text-foreground">✕</button>
+                  </li>
+                ))}
+                {pending.length === 0 && (
+                  <li className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground py-3">no pending requests</li>
+                )}
+              </ul>
+            </section>
+          )}
+
           <section>
             <div className="text-xs font-mono uppercase tracking-[0.4em] text-muted-foreground mb-3">[ up next — top of queue ]</div>
             {queue[0] ? (
