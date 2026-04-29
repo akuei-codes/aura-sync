@@ -203,8 +203,9 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [active, sessionId, hostToken, deviceReady]);
 
-  // ---- Smart crossfade trigger: at ~65% of duration OR <8s remaining --------
-  // We don't play full songs — cut earlier to keep energy moving.
+  // ---- Smart crossfade trigger: at ~65% of duration OR <5s remaining --------
+  // We don't play full songs — cut earlier to keep energy moving. Minimum 25s
+  // of playback before we can advance, to prevent runaway advances on clock skew.
   useEffect(() => {
     if (!active || !sessionId || !hostToken) return;
     const t = setInterval(async () => {
@@ -212,11 +213,15 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
         const ct = await getCurrentTrack({ data: { slug: hostSlug! } });
         const session = await getSession({ data: { slug: hostSlug! } });
         if (!ct || !session?.ignited || !session?.autopilot) return;
-        const elapsed = Date.now() - new Date(ct.position_set_at).getTime();
+        const setAt = new Date(ct.position_set_at).getTime();
+        if (!Number.isFinite(setAt)) return;
+        const elapsed = Math.max(0, Date.now() - setAt);
         const pos = ct.is_paused ? ct.position_ms_at : ct.position_ms_at + elapsed;
         const remaining = ct.duration_ms - pos;
-        const energyCutPoint = ct.duration_ms * 0.65; // play 65% of each track
-        const shouldCut = (pos >= energyCutPoint) || (remaining > 0 && remaining < 8000);
+        const energyCutPoint = ct.duration_ms * 0.65;
+        // Hard floor: never cut in the first 25 seconds of a track.
+        if (elapsed < 25000 && ct.position_ms_at < 25000) return;
+        const shouldCut = (pos >= energyCutPoint) || (remaining > 0 && remaining < 5000);
         if (shouldCut && !advancingRef.current) {
           doAdvance({ withSfx: true });
         }

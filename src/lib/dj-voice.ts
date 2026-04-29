@@ -1,6 +1,8 @@
-// AI DJ voice callouts via ElevenLabs TTS.
-// All requests go through the server route /api/elevenlabs/tts (never exposes the API key).
-// Phrases are pre-cached as audio blobs at startup so transitions are instant.
+// AI DJ voice — ElevenLabs TTS with browser SpeechSynthesis fallback.
+// All requests are routed through /api/elevenlabs/tts (the API key never
+// leaves the server). Phrases are pre-cached as audio blobs at startup so
+// transitions are instant. If ElevenLabs is unavailable, we fall back to the
+// browser's SpeechSynthesisUtterance for the rest of the session.
 
 const VOICES = [
   "XSr0HH9U8dbZZaKq4Rmh", // Custom ZYNK DJ voice
@@ -63,32 +65,33 @@ function chosenVoice(): string {
   return pickedVoice;
 }
 
-// ---- Cache layer: pre-fetched audio blobs (per text) ----
+// ---- Provider mode (premium ElevenLabs vs browser fallback) ---------------
+type Provider = "premium" | "browser";
+let provider: Provider = "premium";
+let consecutiveFailures = 0;
+
+// ---- Cache layer: pre-fetched audio blobs (per text) ---------------------
 const audioCache = new Map<string, Promise<Blob>>();
 
-async function fetchTtsBlob(text: string, voiceId: string, attempt = 0): Promise<Blob> {
-  try {
-    const res = await fetch("/api/elevenlabs/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voiceId }),
-    });
-    if (!res.ok) {
-      // Retry on 429 / 5xx with backoff
-      if ((res.status === 429 || res.status >= 500) && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
-        return fetchTtsBlob(text, voiceId, attempt + 1);
-      }
-      throw new Error(`TTS ${res.status}`);
+async function fetchTtsBlob(text: string, voiceId: string): Promise<Blob> {
+  const res = await fetch("/api/elevenlabs/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voiceId }),
+  });
+  if (!res.ok) throw new Error(`TTS http ${res.status}`);
+  const ct = res.headers.get("Content-Type") ?? "";
+  if (ct.includes("application/json")) {
+    // Server signaled fallback — flip to browser provider permanently this session.
+    let payload: { fallback?: boolean; error?: string } = {};
+    try { payload = await res.json(); } catch { /* ignore */ }
+    if (payload.fallback) {
+      provider = "browser";
+      throw new Error(`TTS fallback: ${payload.error ?? "unknown"}`);
     }
-    return await res.blob();
-  } catch (e) {
-    if (attempt < 2) {
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
-      return fetchTtsBlob(text, voiceId, attempt + 1);
-    }
-    throw e;
+    throw new Error("TTS returned JSON without fallback");
   }
+  return await res.blob();
 }
 
 function cacheKey(text: string, voiceId: string) {
@@ -101,12 +104,12 @@ function getCachedBlob(text: string, voiceId: string): Promise<Blob> {
   if (!p) {
     p = fetchTtsBlob(text, voiceId);
     audioCache.set(key, p);
-    p.catch(() => audioCache.delete(key)); // allow retry on next call
+    p.catch(() => audioCache.delete(key));
   }
   return p;
 }
 
-/** Pre-warm the cache on app boot — fire all common phrases in parallel. */
+/** Pre-warm common phrases on first user gesture. Staggered to avoid 429. */
 let prewarmStarted = false;
 export function prewarmDjVoice() {
   if (prewarmStarted) return;
@@ -115,15 +118,83 @@ export function prewarmDjVoice() {
   const all = [
     ...TRANSITION_LINES, ...ENERGY_LINES, ...VOTE_LINES, ...FIRE_LINES, ...IGNITE_LINES,
   ];
-  // Stagger so we don't 429 the upstream
   all.forEach((line, i) => {
-    setTimeout(() => { void getCachedBlob(line, voice).catch(() => {}); }, i * 250);
+    setTimeout(() => { void getCachedBlob(line, voice).catch(() => {}); }, i * 350);
   });
+}
+
+// ---- Sequential audio queue: one DJ utterance at a time -------------------
+type QueueJob = () => Promise<void>;
+const queue: QueueJob[] = [];
+let queueRunning = false;
+async function runQueue() {
+  if (queueRunning) return;
+  queueRunning = true;
+  try {
+    while (queue.length) {
+      const job = queue.shift()!;
+      try { await job(); } catch { /* swallow */ }
+    }
+  } finally {
+    queueRunning = false;
+  }
+}
+function enqueue(job: QueueJob) {
+  queue.push(job);
+  void runQueue();
+}
+
+// ---- Browser fallback ----------------------------------------------------
+function speakBrowser(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      u.rate = 1.05;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      window.speechSynthesis.speak(u);
+    } catch { resolve(); }
+  });
+}
+
+// ---- Premium playback (ElevenLabs blob through Web Audio for loudness) ---
+let activeAudio: HTMLAudioElement | null = null;
+let sharedActx: AudioContext | null = null;
+
+async function speakPremium(text: string, voice: string): Promise<void> {
+  const blob = await getCachedBlob(text, voice);
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.crossOrigin = "anonymous";
+  audio.volume = 1.0;
+  try {
+    if (typeof window !== "undefined") {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AC) {
+        if (!sharedActx) sharedActx = new AC();
+        if (sharedActx.state === "suspended") await sharedActx.resume();
+        const src = sharedActx.createMediaElementSource(audio);
+        const g = sharedActx.createGain();
+        g.gain.value = 2.4;
+        src.connect(g).connect(sharedActx.destination);
+      }
+    }
+  } catch { /* fall back to default routing */ }
+  activeAudio = audio;
+  await new Promise<void>((resolve) => {
+    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    void audio.play().catch(() => resolve());
+  });
+  if (activeAudio === audio) activeAudio = null;
 }
 
 let lastCalloutAt = 0;
 const MIN_GAP_MS = 5000;
-let activeAudio: HTMLAudioElement | null = null;
 
 export async function speakCallout(
   kind: CalloutKind,
@@ -136,40 +207,37 @@ export async function speakCallout(
   const text = pick(ALL_LINES[kind]);
   const voice = chosenVoice();
 
-  try {
-    const blob = await getCachedBlob(text, voice);
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.volume = 1.0;
-    try {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AC) {
-        const actx = new AC();
-        const src = actx.createMediaElementSource(audio);
-        const g = actx.createGain();
-        g.gain.value = 2.4;
-        src.connect(g).connect(actx.destination);
-      }
-    } catch { /* fall back */ }
-    activeAudio = audio;
-
+  enqueue(async () => {
     opts.onDuck?.();
-    await new Promise<void>((resolve) => {
-      audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-      audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-      void audio.play().catch(() => resolve());
-    });
-    opts.onUnduck?.();
-    if (activeAudio === audio) activeAudio = null;
-  } catch {
-    // Silent fail — callout layer must never block playback
-    opts.onUnduck?.();
-  }
+    try {
+      if (provider === "premium") {
+        try {
+          await speakPremium(text, voice);
+          consecutiveFailures = 0;
+        } catch {
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= 2) provider = "browser";
+          await speakBrowser(text);
+        }
+      } else {
+        await speakBrowser(text);
+      }
+    } finally {
+      opts.onUnduck?.();
+    }
+  });
 }
 
 export function stopCallout() {
   if (activeAudio) {
-    activeAudio.pause();
+    try { activeAudio.pause(); } catch { /* ignore */ }
     activeAudio = null;
   }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  }
+  queue.length = 0;
 }
+
+/** Diagnostic: which provider are we on? */
+export function getDjVoiceProvider(): Provider { return provider; }
