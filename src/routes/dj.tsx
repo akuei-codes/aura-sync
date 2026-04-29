@@ -216,6 +216,19 @@ function DJ() {
     return () => { cancelled = true; clearInterval(t); };
   }, [session?.id, token, autoApprove]);
 
+  // When the Spotify device becomes ready after the room is already ignited
+  // (host ignited before SDK loaded, or page was refreshed), kick playback of
+  // the current track on the device so audio actually starts.
+  const resumedTrackRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session?.ignited || !deviceReady || !current || !token) return;
+    if (resumedTrackRef.current === current.spotify_track_id) return;
+    resumedTrackRef.current = current.spotify_track_id;
+    resumeCurrentOnDevice({ data: { sessionId: session.id, djToken: token } }).catch(() => {
+      resumedTrackRef.current = null;
+    });
+  }, [session?.ignited, deviceReady, current?.spotify_track_id, token]);
+
   async function ignite() {
     if (!session || !token || igniting) return;
     setIgniting(true);
