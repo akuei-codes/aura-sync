@@ -399,14 +399,24 @@ export const advanceToNextTrack = createServerFn({ method: "POST" })
       select id, spotify_track_id, uri, title, artist, album_image_url, preview_url, duration_ms,
              bpm, key_pitch_class, mode, energy, vote_count
       from public.queue_items
-      where session_id = ${data.sessionId} and played_at is null
+      where session_id = ${data.sessionId} and played_at is null and approved = true and rejected_at is null
       order by vote_count desc, created_at asc
       limit 30
     `;
     if (candidates.length === 0) return { ok: false, reason: "queue_empty" };
 
+    // Real reaction velocity over the last 2 minutes — this drives crowd_energy and AI target curve.
+    const reactionStats = await sql<Array<{ recent: number }>>`
+      select count(*)::int as recent from public.reactions
+      where session_id = ${data.sessionId} and created_at > now() - interval '2 minutes'
+    `;
+    const reactionsPerMin = (reactionStats[0]?.recent ?? 0) / 2;
     const sessionMinutes = s.started_at ? (Date.now() - s.started_at.getTime()) / 60000 : 0;
-    const energyTarget = nextEnergyTarget(sessionMinutes, s.reaction_count_total / Math.max(1, sessionMinutes));
+    const energyTarget = nextEnergyTarget(sessionMinutes, reactionsPerMin);
+
+    // Push the new energy reading back to the session so the UI/projection follows the crowd.
+    await sql`update public.sessions set crowd_energy = ${energyTarget} where id = ${data.sessionId}`;
+    await sql`insert into public.energy_snapshots (session_id, energy) values (${data.sessionId}, ${energyTarget})`;
 
     const currentDeck = current[0] ?? { title: "—", artist: "—", bpm: null, key_pitch_class: null, mode: null, energy: null };
     const pick = pickNextTrack(currentDeck, candidates, energyTarget);
