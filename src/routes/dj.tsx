@@ -444,6 +444,7 @@ function DJ() {
                   setAdvancing(true);
                   try {
                     await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+                    await refresh();
                   } catch (e) {
                     setPlayerError(e instanceof Error ? e.message : "advance failed");
                   } finally {
