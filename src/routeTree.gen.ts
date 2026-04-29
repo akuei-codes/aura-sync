@@ -17,6 +17,7 @@ import { Route as AudienceRouteImport } from './routes/audience'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSpotifyLoginRouteImport } from './routes/api.spotify.login'
 import { Route as ApiSpotifyCallbackRouteImport } from './routes/api.spotify.callback'
+import { Route as ApiElevenlabsTtsRouteImport } from './routes/api.elevenlabs.tts'
 
 const RecapRoute = RecapRouteImport.update({
   id: '/recap',
@@ -58,6 +59,11 @@ const ApiSpotifyCallbackRoute = ApiSpotifyCallbackRouteImport.update({
   path: '/api/spotify/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiElevenlabsTtsRoute = ApiElevenlabsTtsRouteImport.update({
+  id: '/api/elevenlabs/tts',
+  path: '/api/elevenlabs/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   DjRoute: typeof DjRoute
   ProjectionRoute: typeof ProjectionRoute
   RecapRoute: typeof RecapRoute
+  ApiElevenlabsTtsRoute: typeof ApiElevenlabsTtsRoute
   ApiSpotifyCallbackRoute: typeof ApiSpotifyCallbackRoute
   ApiSpotifyLoginRoute: typeof ApiSpotifyLoginRoute
 }
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSpotifyCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/elevenlabs/tts': {
+      id: '/api/elevenlabs/tts'
+      path: '/api/elevenlabs/tts'
+      fullPath: '/api/elevenlabs/tts'
+      preLoaderRoute: typeof ApiElevenlabsTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   DjRoute: DjRoute,
   ProjectionRoute: ProjectionRoute,
   RecapRoute: RecapRoute,
+  ApiElevenlabsTtsRoute: ApiElevenlabsTtsRoute,
   ApiSpotifyCallbackRoute: ApiSpotifyCallbackRoute,
   ApiSpotifyLoginRoute: ApiSpotifyLoginRoute,
 }
