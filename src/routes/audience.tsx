@@ -5,6 +5,7 @@ import { Equalizer } from "@/components/zynk/Equalizer";
 import { Logo } from "@/components/zynk/Logo";
 import { useLiveSession } from "@/hooks/useLiveSession";
 import {
+  getQueueHistory,
   heartbeat,
   requestTrack,
   searchPublic,

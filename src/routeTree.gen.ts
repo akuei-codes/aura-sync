@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as RecapRouteImport } from './routes/recap'
 import { Route as ProjectionRouteImport } from './routes/projection'
 import { Route as DjRouteImport } from './routes/dj'
@@ -19,6 +20,11 @@ import { Route as ApiSpotifyLoginRouteImport } from './routes/api.spotify.login'
 import { Route as ApiSpotifyCallbackRouteImport } from './routes/api.spotify.callback'
 import { Route as ApiElevenlabsTtsRouteImport } from './routes/api.elevenlabs.tts'
 
+const SessionsRoute = SessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecapRoute = RecapRouteImport.update({
   id: '/recap',
   path: '/recap',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/sessions': typeof SessionsRoute
   '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/sessions': typeof SessionsRoute
   '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/dj': typeof DjRoute
   '/projection': typeof ProjectionRoute
   '/recap': typeof RecapRoute
+  '/sessions': typeof SessionsRoute
   '/api/elevenlabs/tts': typeof ApiElevenlabsTtsRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/login': typeof ApiSpotifyLoginRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/sessions'
     | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/sessions'
     | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/dj'
     | '/projection'
     | '/recap'
+    | '/sessions'
     | '/api/elevenlabs/tts'
     | '/api/spotify/callback'
     | '/api/spotify/login'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   DjRoute: typeof DjRoute
   ProjectionRoute: typeof ProjectionRoute
   RecapRoute: typeof RecapRoute
+  SessionsRoute: typeof SessionsRoute
   ApiElevenlabsTtsRoute: typeof ApiElevenlabsTtsRoute
   ApiSpotifyCallbackRoute: typeof ApiSpotifyCallbackRoute
   ApiSpotifyLoginRoute: typeof ApiSpotifyLoginRoute
@@ -149,6 +162,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sessions': {
+      id: '/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recap': {
       id: '/recap'
       path: '/recap'
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   DjRoute: DjRoute,
   ProjectionRoute: ProjectionRoute,
   RecapRoute: RecapRoute,
+  SessionsRoute: SessionsRoute,
   ApiElevenlabsTtsRoute: ApiElevenlabsTtsRoute,
   ApiSpotifyCallbackRoute: ApiSpotifyCallbackRoute,
   ApiSpotifyLoginRoute: ApiSpotifyLoginRoute,
