@@ -374,9 +374,9 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Unlock AudioContext on first user gesture
+  // Unlock AudioContext + prewarm DJ voice cache on first user gesture
   useEffect(() => {
-    const unlock = () => { unlockSfx(); };
+    const unlock = () => { unlockSfx(); prewarmDjVoice(); };
     window.addEventListener("pointerdown", unlock, { once: true });
     window.addEventListener("keydown", unlock, { once: true });
     return () => {
