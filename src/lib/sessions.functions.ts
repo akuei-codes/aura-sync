@@ -53,14 +53,15 @@ export const getSession = createServerFn({ method: "GET" })
     const rows = await sql<
       Array<{
         id: string; slug: string; title: string; vibe: string; status: string;
-        crowd_energy: number; autopilot: boolean; projection_mode: string;
+        crowd_energy: number; autopilot: boolean; auto_approve: boolean; ignited: boolean;
+        projection_mode: string;
         reaction_count_total: number; vote_count_total: number;
         listener_estimate: number; started_at: Date | null;
         spotify_user_id: string | null;
       }>
     >`
-      select id, slug, title, vibe, status, crowd_energy, autopilot, projection_mode,
-             reaction_count_total, vote_count_total, listener_estimate, started_at,
+      select id, slug, title, vibe, status, crowd_energy, autopilot, auto_approve, ignited,
+             projection_mode, reaction_count_total, vote_count_total, listener_estimate, started_at,
              spotify_user_id
       from public.sessions where slug = ${data.slug} limit 1
     `;
