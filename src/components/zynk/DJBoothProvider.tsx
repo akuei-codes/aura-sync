@@ -258,25 +258,23 @@ export function DJBoothProvider({ children }: { children: React.ReactNode }) {
     if (advancingRef.current || !sessionId || !hostToken) return;
     advancingRef.current = true;
     try {
-      // Volume ramp down + sweep
+      // Layered transition SFX (scratch -> sweep -> riser -> drop)
       const player = playerRef.current;
+      if (opts.withSfx) playTransitionSequence();
       if (player && opts.withSfx) {
-        playSweepDown(2000, 0.22);
-        // Smooth volume ramp from 0.85 -> 0.2 over 1.8s
-        const steps = 12;
+        // Smooth volume ramp from 0.85 -> 0.2 over ~1.4s
+        const steps = 10;
         for (let i = 0; i < steps; i++) {
           const v = 0.85 - ((0.85 - 0.2) * (i + 1) / steps);
           try { await player.setVolume(v); } catch { /* ignore */ }
-          await new Promise((r) => setTimeout(r, 130));
+          await new Promise((r) => setTimeout(r, 110));
         }
       }
-      if (opts.withSfx) playRiser(2400, 0.32);
 
       const result = await advanceToNextTrack({ data: { sessionId, djToken: hostToken } });
 
       if (opts.withSfx) {
-        // Drop hits roughly when new track starts
-        setTimeout(() => playDrop(0.45), 200);
+        setTimeout(() => playImpact(0.45), 250);
       }
 
       // Restore volume
