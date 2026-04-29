@@ -1,25 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Logo } from "@/components/zynk/Logo";
 import { Equalizer } from "@/components/zynk/Equalizer";
 import { ProjectionEngine } from "@/components/zynk/ProjectionEngine";
 import { useLiveSession } from "@/hooks/useLiveSession";
+import { useDJBooth } from "@/components/zynk/DJBoothProvider";
 import {
-  advanceToNextTrack,
-  registerDeviceId,
   setAutopilot as setAutopilotFn,
   setAutoApprove as setAutoApproveFn,
   igniteRoom as igniteRoomFn,
-  setPlaybackPaused,
-  syncPlaybackPosition,
-  resumeCurrentOnDevice,
   updateEnergy,
-  getSpotifyAccessToken,
   getPendingRequests,
   approveRequest,
   rejectRequest,
 } from "@/lib/sessions.functions";
+import { speakCallout } from "@/lib/dj-voice";
 
 export const Route = createFileRoute("/dj")({
   validateSearch: z.object({
@@ -43,44 +39,21 @@ function fmt(ms: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-declare global {
-  interface Window {
-    Spotify?: {
-      Player: new (opts: {
-        name: string;
-        getOAuthToken: (cb: (token: string) => void) => void;
-        volume?: number;
-      }) => SpotifyPlayer;
-    };
-    onSpotifyWebPlaybackSDKReady?: () => void;
-  }
-}
-
-interface SpotifyPlayer {
-  connect(): Promise<boolean>;
-  disconnect(): void;
-  addListener(event: string, cb: (data: unknown) => void): void;
-  removeListener(event: string): void;
-  togglePlay(): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  getCurrentState(): Promise<{ position: number; duration: number; paused: boolean } | null>;
-}
-
 function DJ() {
   const { slug, token, warn } = Route.useSearch();
   const noSession = !slug || !token;
   const { session, queue, current, hype, error, refresh } = useLiveSession(slug ?? null);
+  const booth = useDJBooth();
   const [autopilot, setLocalAutopilot] = useState(true);
   const [autoApprove, setLocalAutoApprove] = useState(true);
   const [energyLocal, setEnergyLocal] = useState(0.55);
   const [position, setPosition] = useState(0);
-  const [deviceReady, setDeviceReady] = useState(false);
-  const [playerError, setPlayerError] = useState<string | null>(null);
-  const [advancing, setAdvancing] = useState(false);
   const [pending, setPending] = useState<Array<{ id: string; title: string; artist: string; album_image_url: string | null; requested_by: string | null }>>([]);
   const [igniting, setIgniting] = useState(false);
-  const playerRef = useRef<SpotifyPlayer | null>(null);
+  const [advancing, setAdvancing] = useState(false);
+
+  const deviceReady = booth.deviceReady;
+  const playerError = booth.playerError;
 
   // Sync local controls with server state
   useEffect(() => {
@@ -103,104 +76,6 @@ function DJ() {
     return () => clearInterval(t);
   }, [current?.position_set_at, current?.position_ms_at, current?.is_paused, current?.duration_ms]);
 
-  // ---- Spotify Web Playback SDK -------------------------------------------
-  useEffect(() => {
-    if (!session || !token || warn === "free") return;
-    let cancelled = false;
-
-    function loadSdk(): Promise<void> {
-      return new Promise((resolve, reject) => {
-        if (window.Spotify) return resolve();
-        const existing = document.getElementById("spotify-sdk");
-        if (existing) {
-          existing.addEventListener("load", () => resolve());
-          return;
-        }
-        const s = document.createElement("script");
-        s.id = "spotify-sdk";
-        s.src = "https://sdk.scdn.co/spotify-player.js";
-        s.async = true;
-        s.onerror = () => reject(new Error("Spotify SDK failed to load"));
-        window.onSpotifyWebPlaybackSDKReady = () => resolve();
-        document.body.appendChild(s);
-      });
-    }
-
-    (async () => {
-      try {
-        await loadSdk();
-        if (cancelled || !window.Spotify) return;
-        const player = new window.Spotify.Player({
-          name: `ZYNK Booth · ${session.title}`,
-          getOAuthToken: (cb: (token: string) => void) => {
-            getSpotifyAccessToken({ data: { sessionId: session.id, djToken: token! } })
-              .then((t: { accessToken: string }) => cb(t.accessToken))
-              .catch((e: unknown) => setPlayerError(String(e)));
-          },
-          volume: 0.8,
-        });
-        playerRef.current = player;
-        player.addListener("ready", async (data) => {
-          const { device_id } = data as { device_id: string };
-          await registerDeviceId({ data: { sessionId: session.id, djToken: token!, deviceId: device_id } });
-          setDeviceReady(true);
-        });
-        player.addListener("not_ready", () => setDeviceReady(false));
-        player.addListener("initialization_error", (d) => setPlayerError(String((d as { message: string }).message)));
-        player.addListener("authentication_error", (d) => setPlayerError(String((d as { message: string }).message)));
-        player.addListener("account_error", () => setPlayerError("Spotify Premium required."));
-        // Detect track-end so autopilot chains the next song precisely.
-        player.addListener("player_state_changed", (state) => {
-          const st = state as { position: number; duration: number; paused: boolean; track_window?: { previous_tracks?: unknown[] } } | null;
-          if (!st) return;
-          // Spotify signals end-of-track as paused at position 0 with the track moved into previous_tracks.
-          const ended = st.paused && st.position === 0 && (st.track_window?.previous_tracks?.length ?? 0) > 0;
-          if (ended && session && token) {
-            advanceToNextTrack({ data: { sessionId: session.id, djToken: token } }).catch(() => {});
-          }
-        });
-        await player.connect();
-      } catch (e) {
-        setPlayerError(e instanceof Error ? e.message : "Player init failed");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      playerRef.current?.disconnect();
-      playerRef.current = null;
-    };
-  }, [session?.id, token, warn]);
-
-  // Periodically sync local Spotify player position back to server so audience can follow
-  useEffect(() => {
-    if (!session || !token || !playerRef.current || !deviceReady) return;
-    const t = setInterval(async () => {
-      try {
-        const state = await playerRef.current!.getCurrentState();
-        if (!state) return;
-        await syncPlaybackPosition({
-          data: { sessionId: session.id, djToken: token, positionMs: state.position, isPaused: state.paused },
-        });
-      } catch {
-        /* swallow */
-      }
-    }, 3000);
-    return () => clearInterval(t);
-  }, [session?.id, token, deviceReady]);
-
-  // Autopilot: when track approaches end, automatically advance — but only after the host ignites.
-  useEffect(() => {
-    if (!autopilot || !session?.ignited || !session || !token || !current) return;
-    const remaining = current.duration_ms - position;
-    if (remaining < 4000 && remaining > 0 && !advancing) {
-      setAdvancing(true);
-      advanceToNextTrack({ data: { sessionId: session.id, djToken: token } })
-        .catch((e) => setPlayerError(String(e)))
-        .finally(() => setTimeout(() => setAdvancing(false), 5000));
-    }
-  }, [autopilot, position, current?.duration_ms, session?.id, session?.ignited, token]);
-
   // Poll pending requests when manual approval mode is on.
   useEffect(() => {
     if (!session || !token || autoApprove) { setPending([]); return; }
@@ -216,46 +91,18 @@ function DJ() {
     return () => { cancelled = true; clearInterval(t); };
   }, [session?.id, token, autoApprove]);
 
-  // When the Spotify device becomes ready after the room is already ignited
-  // (host ignited before SDK loaded, or page was refreshed), kick playback of
-  // the current track on the device so audio actually starts. Only do this for
-  // "stale" current_track rows — fresh advances already start playback server-side.
-  const resumedTrackRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!session?.ignited || !deviceReady || !current || !token) return;
-    if (resumedTrackRef.current === current.spotify_track_id) return;
-    const ageMs = Date.now() - new Date(current.position_set_at).getTime();
-    if (ageMs < 3000) { resumedTrackRef.current = current.spotify_track_id; return; }
-    resumedTrackRef.current = current.spotify_track_id;
-    resumeCurrentOnDevice({ data: { sessionId: session.id, djToken: token } }).catch(() => {
-      resumedTrackRef.current = null;
-    });
-  }, [session?.ignited, deviceReady, current?.spotify_track_id, current?.position_set_at, token]);
-
   async function ignite() {
     if (!session || !token || igniting) return;
     setIgniting(true);
     try {
       await igniteRoomFn({ data: { sessionId: session.id, djToken: token } });
-      await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+      await booth.triggerAdvance();
       await refresh();
+      void speakCallout("ignite", { force: true });
     } catch (e) {
-      setPlayerError(e instanceof Error ? e.message : "ignite failed");
+      console.error(e);
     } finally {
       setIgniting(false);
-    }
-  }
-
-  async function togglePlayPause() {
-    if (!playerRef.current || !session || !token) return;
-    try {
-      await playerRef.current.togglePlay();
-      const state = await playerRef.current.getCurrentState();
-      if (state) {
-        await setPlaybackPaused({ data: { sessionId: session.id, djToken: token, paused: state.paused, positionMs: state.position } });
-      }
-    } catch (e) {
-      setPlayerError(e instanceof Error ? e.message : "toggle failed");
     }
   }
 
@@ -276,6 +123,7 @@ function DJ() {
     await setAutoApproveFn({ data: { sessionId: session.id, djToken: token, enabled: next } });
     await refresh();
   }
+
 
   if (noSession) {
     return (
@@ -428,7 +276,7 @@ function DJ() {
 
             <ControlCard label={current?.is_paused ? "Paused" : "Playing"} value={deviceReady ? "READY" : "..."}>
               <button
-                onClick={togglePlayPause}
+                onClick={booth.togglePlayPause}
                 disabled={!deviceReady || !current}
                 className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-[0.3em] border border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40"
               >
@@ -443,10 +291,10 @@ function DJ() {
                   if (!session || !token) return;
                   setAdvancing(true);
                   try {
-                    await advanceToNextTrack({ data: { sessionId: session.id, djToken: token } });
+                    await booth.triggerAdvance();
                     await refresh();
                   } catch (e) {
-                    setPlayerError(e instanceof Error ? e.message : "advance failed");
+                    console.error(e);
                   } finally {
                     setAdvancing(false);
                   }
